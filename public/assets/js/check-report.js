@@ -15,10 +15,33 @@ async function loadReport(credentials) {
   document.querySelector('#resultStatus').textContent = data.status;
   document.querySelector('#resultClassification').textContent = data.klasifikasi || 'Belum ditentukan';
   document.querySelector('#resultDate').textContent = new Date(data.tanggalLaporan).toLocaleString('id-ID');
+
+  const finalOutcome = document.querySelector('#resultFinalOutcome');
+  const outcomeList = document.querySelector('#resultOutcomeList');
+  const outcomeSummary = document.querySelector('#resultOutcomeSummary');
+  const outcomeDate = document.querySelector('#resultOutcomeDate');
+  outcomeList.replaceChildren();
+  if (data.hasilAkhir) {
+    finalOutcome.hidden = false;
+    (data.hasilAkhir.hasil ?? []).forEach((item) => {
+      const row = document.createElement('p');
+      const strong = document.createElement('strong');
+      strong.textContent = `Dugaan ${item.dugaan}: ${item.hasil}`;
+      row.append(strong); outcomeList.append(row);
+    });
+    outcomeSummary.textContent = data.hasilAkhir.ringkasan || '';
+    outcomeDate.textContent = data.hasilAkhir.waktu ? `Diselesaikan: ${new Date(data.hasilAkhir.waktu).toLocaleString('id-ID')}` : '';
+  } else {
+    finalOutcome.hidden = true;
+    outcomeSummary.textContent = '';
+    outcomeDate.textContent = '';
+  }
+
   const messages = document.querySelector('#resultMessages');
-  messages.innerHTML = '';
-  if (!data.pesan?.length) messages.innerHTML = '<p class="muted">Belum ada pesan baru.</p>';
-  else data.pesan.forEach((item) => {
+  messages.replaceChildren();
+  if (!data.pesan?.length) {
+    const empty = document.createElement('p'); empty.className = 'muted'; empty.textContent = 'Belum ada pesan baru.'; messages.append(empty);
+  } else data.pesan.forEach((item) => {
     const article = document.createElement('article'); article.className = 'message-item';
     const head = document.createElement('strong'); head.textContent = item.dari;
     const body = document.createElement('p'); body.textContent = item.isi;
@@ -26,7 +49,7 @@ async function loadReport(credentials) {
     article.append(head, body, time); messages.append(article);
   });
   result.hidden = false;
-  replyForm.hidden = false;
+  replyForm.hidden = data.canReply === false;
 }
 
 form?.addEventListener('submit', async (event) => {
