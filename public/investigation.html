@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Workspace Tim Pemeriksa Portal Pelaporan SAI Cipedak." />
+  <title>Tim Pemeriksa — Portal Pelaporan SAI Cipedak</title>
+  <link rel="stylesheet" href="assets/css/app.css" />
+  <script src="assets/js/config.js"></script>
+</head>
+<body>
+<header><div class="container header-inner"><a class="brand" href="index.html">SAI Cipedak</a><div class="pill">Tim Pemeriksa</div></div></header>
+<main class="container">
+  <section id="loginPanel" class="form-card compact-form" hidden>
+    <h1 class="internal-title">Workspace Pemeriksaan</h1>
+    <p>Masuk dengan akun Google yang memiliki assignment Tim Pemeriksa aktif.</p>
+    <button id="googleLogin" class="primary" type="button">Masuk dengan Google</button>
+    <div id="loginMessage" class="form-message" hidden></div>
+  </section>
+
+  <section id="workspacePanel" hidden>
+    <div class="internal-toolbar">
+      <div><p class="eyebrow">Workspace internal</p><h1 class="internal-title">Pemeriksaan</h1><p class="muted" id="userLabel"></p></div>
+      <div class="action-row"><button id="refreshButton" type="button" class="secondary">Segarkan</button><button id="logoutButton" type="button" class="text-button">Keluar</button></div>
+    </div>
+    <div id="pageMessage" class="form-message internal-message" hidden></div>
+    <div class="internal-grid">
+      <aside class="case-list-panel"><h2>Assignment Aktif</h2><div id="caseList" class="case-list"></div></aside>
+      <section id="caseDetail" class="case-detail"><p class="empty-state">Pilih laporan untuk membuka workspace.</p></section>
+    </div>
+  </section>
+</main>
+<footer class="container">SAI Cipedak · Portal Pelaporan</footer>
+<script type="module" src="assets/js/investigation.js"></script>
+</body>
+</html>
