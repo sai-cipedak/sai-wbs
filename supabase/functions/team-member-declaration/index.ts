@@ -35,6 +35,11 @@ Deno.serve(async (req: Request) => {
       const { data: cases } = caseIds.length ? await admin.from('cases').select('id,public_case_id,classification,status,organization_id').in('id', caseIds) : { data: [] } as any;
       const caseMap = new Map((cases ?? []).map((c: any) => [c.id, c]));
 
+      const { data: assignments } = caseIds.length
+        ? await admin.from('case_assignments').select('case_id,assignment_role,access_status').eq('user_id', user.id).in('case_id', caseIds)
+        : { data: [] } as any;
+      const assignmentMap = new Map((assignments ?? []).map((a: any) => [`${a.case_id}|${a.assignment_role}`, a.access_status]));
+
       for (const member of members ?? []) {
         if (!member.declaration_at && member.nomination_status === 'PENDING_ACCOUNT') {
           await admin.from('case_team_members').update({ linked_user_id: user.id, nomination_status: 'PENDING_DECLARATION', updated_at: new Date().toISOString() }).eq('id', member.id);
@@ -70,6 +75,7 @@ Deno.serve(async (req: Request) => {
           rationale: m.rationale,
           conflictContext: m.conflict_context,
           nominationStatus: m.nomination_status,
+          assignmentStatus: assignmentMap.get(`${m.case_id}|${m.committee_role}`) ?? null,
           nominatedAt: m.nominated_at,
           declarationAt: m.declaration_at,
         };
