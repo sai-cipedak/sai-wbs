@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Cek perkembangan laporan anonim SAI Cipedak." />
+  <title>Cek Laporan — SAI Cipedak</title>
+  <link rel="stylesheet" href="assets/css/app.css" />
+  <script src="assets/js/config.js"></script>
+</head>
+<body>
+<header><div class="container header-inner"><a class="brand" href="index.html">SAI Cipedak</a><div class="pill">Cek Laporan</div></div></header>
+<main class="container narrow">
+  <a class="back-link" href="index.html">← Kembali</a>
+  <section class="page-head"><h1>Cek perkembangan laporan.</h1><p class="lead">Untuk laporan tanpa identitas, masukkan Nomor Laporan dan Kunci Rahasia yang diberikan saat laporan dikirim.</p></section>
+  <form id="checkReportForm" class="form-card compact-form">
+    <label>Nomor Laporan<input name="nomorLaporan" autocomplete="off" required placeholder="SAI-CIP-26-…" /></label>
+    <label>Kunci Rahasia<input name="kunciRahasia" autocomplete="off" required placeholder="WBS-…" /></label>
+    <div id="formMessage" class="form-message" hidden></div>
+    <button class="primary" type="submit">Cek laporan</button>
+  </form>
+
+  <section id="reportResult" class="result-card" hidden>
+    <div class="status-head"><div><p class="eyebrow">Status laporan</p><h2 id="resultTitle"></h2></div><span id="resultStatus" class="status-badge"></span></div>
+    <dl class="summary-list"><div><dt>Nomor Laporan</dt><dd id="resultCaseNumber"></dd></div><div><dt>Klasifikasi</dt><dd id="resultClassification"></dd></div><div><dt>Diterima</dt><dd id="resultDate"></dd></div></dl>
+    <h3>Pesan</h3><div id="resultMessages"></div>
+  </section>
+</main>
+<footer class="container">SAI Cipedak · Portal Pelaporan</footer>
+<script type="module" src="assets/js/check-report.js"></script>
+</body>
+</html>

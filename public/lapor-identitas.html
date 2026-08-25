@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Sampaikan laporan dengan identitas melalui Portal Pelaporan SAI Cipedak." />
+  <title>Lapor dengan Identitas — SAI Cipedak</title>
+  <link rel="stylesheet" href="assets/css/app.css" />
+  <script src="assets/js/config.js"></script>
+</head>
+<body>
+<header><div class="container header-inner"><a class="brand" href="index.html">SAI Cipedak</a><div class="pill">Dengan Identitas</div></div></header>
+<main class="container narrow">
+  <a class="back-link" href="index.html">← Kembali</a>
+  <section class="page-head">
+    <h1>Sampaikan laporan dengan identitas.</h1>
+    <p class="lead">Identitas Anda disimpan terpisah dari isi laporan dan tidak terlihat oleh Tim Pemeriksa secara default.</p>
+  </section>
+
+  <section id="successResult" class="result-card success" hidden>
+    <p class="eyebrow">Laporan berhasil diterima</p>
+    <h2 id="resultCaseNumber"></h2>
+    <p id="identityProtection"></p>
+    <a class="button secondary" href="index.html">Kembali ke beranda</a>
+  </section>
+
+  <section id="loginPanel" class="form-card">
+    <h2>Masuk sebagai OTS atau Staff</h2>
+    <p>Gunakan akun Google yang sudah terdaftar pada portal.</p>
+    <button id="googleLogin" class="primary" type="button">Masuk dengan Google</button>
+    <div id="loginMessage" class="form-message" hidden></div>
+  </section>
+
+  <section id="identifiedFormPanel" hidden>
+    <div class="identity-strip"><div><span>Anda masuk sebagai</span><strong id="identityLabel"></strong></div><button id="logoutButton" class="text-button" type="button">Keluar</button></div>
+    <form id="identifiedReportForm" class="report-form">
+      <section class="form-card">
+        <h2>Ceritakan apa yang terjadi</h2>
+        <label>Judul singkat laporan<input name="title" maxlength="180" required /></label>
+        <label>Uraian kejadian<textarea name="narrative" rows="8" maxlength="10000" required></textarea></label>
+        <div class="two-col">
+          <label>Tanggal kejadian <span class="optional">(jika diketahui)</span><input type="date" name="incidentDate" /></label>
+          <label>Waktu <span class="optional">(jika diketahui)</span><input name="incidentTimeText" maxlength="80" /></label>
+        </div>
+        <label>Lokasi <span class="optional">(jika diketahui)</span><input name="locationText" maxlength="240" /></label>
+        <label>Pihak yang terkait <span class="optional">(jika diketahui)</span><textarea name="peopleInvolvedText" rows="3" maxlength="2000"></textarea></label>
+      </section>
+      <section class="form-card safety-card">
+        <h2>Keselamatan dan perlindungan</h2>
+        <fieldset><legend>Apakah ada anak yang saat ini atau dalam waktu dekat berpotensi berada dalam keadaan tidak aman?</legend><label class="choice"><input type="radio" name="childSafetyRisk" value="yes" required /> Ya</label><label class="choice"><input type="radio" name="childSafetyRisk" value="no" required /> Tidak</label></fieldset>
+        <fieldset><legend>Apakah kejadian atau risiko tersebut masih berlangsung?</legend><label class="choice"><input type="radio" name="ongoingRisk" value="yes" required /> Ya</label><label class="choice"><input type="radio" name="ongoingRisk" value="no" required /> Tidak</label></fieldset>
+      </section>
+      <div id="formMessage" class="form-message" hidden></div>
+      <div class="submit-row"><button class="primary" type="submit">Kirim laporan</button></div>
+    </form>
+  </section>
+</main>
+<footer class="container">SAI Cipedak · Portal Pelaporan</footer>
+<script type="module" src="assets/js/identified-report.js"></script>
+</body>
+</html>

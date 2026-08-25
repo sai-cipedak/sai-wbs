@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Sampaikan laporan tanpa menyebutkan identitas melalui Portal Pelaporan SAI Cipedak." />
+  <title>Lapor Tanpa Identitas — SAI Cipedak</title>
+  <link rel="stylesheet" href="assets/css/app.css" />
+  <script src="assets/js/config.js"></script>
+</head>
+<body>
+<header><div class="container header-inner"><a class="brand" href="index.html">SAI Cipedak</a><div class="pill">Tanpa Identitas</div></div></header>
+<main class="container narrow">
+  <a class="back-link" href="index.html">← Kembali</a>
+  <section class="page-head">
+    <h1>Sampaikan laporan tanpa menyebutkan identitas.</h1>
+    <p class="lead">Anda tidak perlu masuk dengan akun personal. Setelah laporan dikirim, simpan Nomor Laporan dan Kunci Rahasia untuk melihat perkembangannya.</p>
+  </section>
+
+  <section id="successResult" class="result-card success" hidden>
+    <p class="eyebrow">Laporan berhasil diterima</p>
+    <h2>Simpan dua informasi ini sekarang.</h2>
+    <p>Kunci Rahasia tidak dapat ditampilkan kembali oleh sistem.</p>
+    <div class="credential-row"><div><span>Nomor Laporan</span><strong id="resultCaseNumber"></strong></div><button type="button" class="small secondary" data-copy-target="#resultCaseNumber">Salin</button></div>
+    <div class="credential-row"><div><span>Kunci Rahasia</span><strong id="resultSecretKey"></strong></div><button type="button" class="small secondary" data-copy-target="#resultSecretKey">Salin</button></div>
+    <a class="button primary" href="cek-laporan.html">Cek perkembangan laporan</a>
+  </section>
+
+  <form id="anonymousReportForm" class="report-form">
+    <section class="form-card">
+      <h2>Akses komunitas</h2>
+      <label>Kode Akses Komunitas
+        <input name="communityAccessCode" autocomplete="off" required placeholder="Masukkan kode yang dibagikan kepada OTS/Staff" />
+      </label>
+      <p class="hint">Kode ini hanya untuk memastikan portal digunakan oleh warga SAI Cipedak. Kode tidak dikaitkan dengan identitas Anda.</p>
+    </section>
+
+    <section class="form-card">
+      <h2>Ceritakan apa yang terjadi</h2>
+      <label>Judul singkat laporan
+        <input name="title" maxlength="180" required placeholder="Contoh: Dugaan konflik kepentingan dalam pengadaan" />
+      </label>
+      <label>Uraian kejadian
+        <textarea name="narrative" rows="8" maxlength="10000" required placeholder="Ceritakan kejadian sejelas yang Anda ketahui. Hindari asumsi jika tidak yakin."></textarea>
+      </label>
+      <div class="two-col">
+        <label>Tanggal kejadian <span class="optional">(jika diketahui)</span><input type="date" name="incidentDate" /></label>
+        <label>Waktu <span class="optional">(jika diketahui)</span><input name="incidentTimeText" maxlength="80" placeholder="Contoh: sekitar 14.00" /></label>
+      </div>
+      <label>Lokasi <span class="optional">(jika diketahui)</span><input name="locationText" maxlength="240" /></label>
+      <label>Pihak yang terkait <span class="optional">(jika diketahui)</span><textarea name="peopleInvolvedText" rows="3" maxlength="2000"></textarea></label>
+    </section>
+
+    <section class="form-card safety-card">
+      <h2>Keselamatan dan perlindungan</h2>
+      <fieldset>
+        <legend>Apakah ada anak yang saat ini atau dalam waktu dekat berpotensi berada dalam keadaan tidak aman?</legend>
+        <label class="choice"><input type="radio" name="childSafetyRisk" value="yes" required /> Ya</label>
+        <label class="choice"><input type="radio" name="childSafetyRisk" value="no" required /> Tidak</label>
+      </fieldset>
+      <fieldset>
+        <legend>Apakah kejadian atau risiko tersebut masih berlangsung?</legend>
+        <label class="choice"><input type="radio" name="ongoingRisk" value="yes" required /> Ya</label>
+        <label class="choice"><input type="radio" name="ongoingRisk" value="no" required /> Tidak</label>
+      </fieldset>
+      <p class="hint">Jika ada risiko keselamatan anak, laporan akan diprioritaskan ke Cluster Lead HSE.</p>
+    </section>
+
+    <div id="formMessage" class="form-message" hidden></div>
+    <div class="submit-row"><button class="primary" type="submit">Kirim laporan</button><p>Dengan mengirim laporan, Anda menyatakan informasi disampaikan dengan itikad baik berdasarkan hal yang Anda ketahui.</p></div>
+  </form>
+</main>
+<footer class="container">SAI Cipedak · Portal Pelaporan</footer>
+<script type="module" src="assets/js/anonymous-report.js"></script>
+</body>
+</html>

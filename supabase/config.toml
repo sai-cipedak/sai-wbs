@@ -2,3 +2,12 @@ project_id = "sai-wbs"
 
 [functions.health]
 verify_jwt = false
+
+[functions.submit-anonymous-report]
+verify_jwt = false
+
+[functions.submit-identified-report]
+verify_jwt = true
+
+[functions.check-anonymous-report]
+verify_jwt = false
