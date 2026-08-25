@@ -1,0 +1,127 @@
+import { createClient } from 'jsr:@supabase/supabase-js@2.112.4';
+import { corsHeaders } from '../_shared/cors.ts';
+import { generatePublicCaseId, jsonResponse, normalizeIntake, ORG_CODE } from '../_shared/intake.ts';
+
+const admin = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+  { auth: { persistSession: false, autoRefreshToken: false } },
+);
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method !== 'POST') return jsonResponse({ error: 'Metode tidak diizinkan.' }, 405, corsHeaders);
+
+  try {
+    const authHeader = req.headers.get('Authorization') ?? '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    if (!token) return jsonResponse({ error: 'Silakan masuk terlebih dahulu.' }, 401, corsHeaders);
+
+    const { data: userResult, error: userError } = await admin.auth.getUser(token);
+    const user = userResult.user;
+    if (userError || !user?.email) return jsonResponse({ error: 'Sesi tidak valid. Silakan masuk kembali.' }, 401, corsHeaders);
+
+    const intake = normalizeIntake(await req.json() as Record<string, unknown>);
+    const email = user.email.trim().toLowerCase();
+
+    const { data: org, error: orgError } = await admin
+      .from('organizations')
+      .select('id, active_policy_version_id')
+      .eq('code', ORG_CODE)
+      .eq('is_active', true)
+      .single();
+    if (orgError || !org?.active_policy_version_id) throw new Error('Konfigurasi organisasi belum siap.');
+
+    const { data: allowlist, error: allowError } = await admin
+      .from('reporter_allowlist')
+      .select('email, member_type')
+      .eq('organization_id', org.id)
+      .eq('is_active', true);
+    if (allowError) throw allowError;
+
+    const membership = (allowlist ?? []).find((row) => String(row.email).trim().toLowerCase() === email);
+    if (!membership) {
+      return jsonResponse({
+        error: 'Akun Google ini belum terdaftar sebagai OTS atau staf SAI Cipedak. Gunakan jalur tanpa identitas atau hubungi pengelola portal.',
+      }, 403, corsHeaders);
+    }
+
+    const displayName = String(user.user_metadata?.full_name ?? user.user_metadata?.name ?? email).slice(0, 200);
+    await admin.from('profiles').upsert({
+      user_id: user.id,
+      organization_id: org.id,
+      display_name: displayName,
+      email,
+      member_type: membership.member_type,
+      is_active: true,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+
+    const safetyFastLane = intake.childSafetyRisk;
+    const publicCaseId = generatePublicCaseId();
+
+    const { data: createdCase, error: caseError } = await admin
+      .from('cases')
+      .insert({
+        organization_id: org.id,
+        public_case_id: publicCaseId,
+        reporting_mode: 'IDENTIFIED',
+        status: safetyFastLane ? 'REFERRED_SAFEGUARDING' : 'SUBMITTED',
+        classification: safetyFastLane ? 'SAFEGUARDING' : null,
+        priority: safetyFastLane ? 'CRITICAL' : null,
+        authority_code: safetyFastLane ? 'HSE' : 'TRIAGE',
+        policy_version_id: org.active_policy_version_id,
+        created_by_user_id: user.id,
+      })
+      .select('id, submitted_at')
+      .single();
+    if (caseError || !createdCase) throw caseError ?? new Error('Gagal membuat laporan.');
+
+    const cleanup = async () => { await admin.from('cases').delete().eq('id', createdCase.id); };
+
+    const { error: reportError } = await admin.from('case_reports').insert({
+      case_id: createdCase.id,
+      title: intake.title,
+      narrative: intake.narrative,
+      incident_date: intake.incidentDate,
+      incident_time_text: intake.incidentTimeText,
+      location_text: intake.locationText,
+      child_safety_risk: intake.childSafetyRisk,
+      ongoing_risk: intake.ongoingRisk,
+      people_involved_text: intake.peopleInvolvedText,
+    });
+    if (reportError) { await cleanup(); throw reportError; }
+
+    const { error: identityError } = await admin.from('case_reporter_identities').insert({
+      case_id: createdCase.id,
+      user_id: user.id,
+      reporter_name: displayName,
+      reporter_email: email,
+      visibility_status: 'HIDDEN',
+    });
+    if (identityError) { await cleanup(); throw identityError; }
+
+    await admin.from('audit_logs').insert({
+      organization_id: org.id,
+      case_id: createdCase.id,
+      actor_user_id: user.id,
+      event_type: 'CASE_SUBMITTED_IDENTIFIED',
+      object_type: 'case',
+      object_id: createdCase.id,
+      details: { safety_fast_lane: safetyFastLane },
+    });
+
+    return jsonResponse({
+      nomorLaporan: publicCaseId,
+      status: safetyFastLane ? 'Sedang Ditangani' : 'Laporan Diterima',
+      submittedAt: createdCase.submitted_at,
+      identityProtection: 'Identitas Anda disimpan terpisah dan tersembunyi dari Tim Pemeriksa secara default.',
+    }, 201, corsHeaders);
+  } catch (error) {
+    console.error('submit-identified-report', error);
+    const message = error instanceof Error && /^(Judul|Uraian|Format|Isian)/.test(error.message)
+      ? error.message
+      : 'Laporan belum dapat dikirim. Silakan coba kembali.';
+    return jsonResponse({ error: message }, 400, corsHeaders);
+  }
+});
