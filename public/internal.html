@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Penelaahan Awal — SAI Cipedak</title>
+  <link rel="stylesheet" href="assets/css/app.css" />
+  <link rel="stylesheet" href="assets/css/internal.css" />
+  <script src="assets/js/config.js"></script>
+</head>
+<body>
+<header>
+  <div class="container header-inner">
+    <a class="brand" href="index.html">SAI Cipedak</a>
+    <div class="pill">Penelaahan Awal</div>
+  </div>
+</header>
+<main class="internal-main container">
+  <section id="loginPanel" class="form-card" hidden>
+    <h1 style="font-size:36px">Akses internal</h1>
+    <p>Masuk menggunakan akun Google yang telah diberi kewenangan internal.</p>
+    <div id="loginMessage" class="form-message error" hidden></div>
+    <button id="googleLogin" class="primary" type="button">Masuk dengan Google</button>
+  </section>
+
+  <section id="dashboardPanel" hidden>
+    <div class="identity-strip">
+      <div><span>Masuk sebagai</span><strong id="userLabel">—</strong></div>
+      <div class="action-row"><button id="refreshButton" class="secondary small" type="button">Muat ulang</button><button id="logoutButton" class="text-button small" type="button">Keluar</button></div>
+    </div>
+    <div id="pageMessage" class="form-message internal-message" hidden></div>
+    <div class="internal-layout">
+      <aside class="case-list">
+        <h2>Antrean Penelaahan</h2>
+        <p class="muted">Hanya laporan yang saat ini berada pada kewenangan Penelaah Awal.</p>
+        <div id="caseList" class="case-list-items"></div>
+      </aside>
+      <section id="caseDetail" class="case-detail"><p class="empty-state">Memuat laporan...</p></section>
+    </div>
+  </section>
+</main>
+<footer class="container">SAI Cipedak · Akses Internal</footer>
+<script type="module" src="assets/js/internal.js"></script>
+</body>
+</html>
