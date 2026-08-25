@@ -1,0 +1,136 @@
+import { createClient } from 'jsr:@supabase/supabase-js@2.112.4';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', { auth: { persistSession: false, autoRefreshToken: false } });
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' } });
+
+async function requireUser(req: Request) {
+  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+  if (!token) throw new Error('UNAUTHENTICATED');
+  const { data, error } = await admin.auth.getUser(token);
+  if (error || !data.user) throw new Error('UNAUTHENTICATED');
+  return data.user;
+}
+
+async function requireSecretariat(userId: string) {
+  const now = new Date().toISOString();
+  const { data, error } = await admin.from('user_system_roles')
+    .select('organization_id, active_from, active_until')
+    .eq('user_id', userId).eq('role_code', 'SECRETARIAT').lte('active_from', now);
+  if (error) throw error;
+  const role = (data ?? []).find((r) => !r.active_until || r.active_until > now);
+  if (!role) throw new Error('FORBIDDEN');
+  return role.organization_id as string;
+}
+
+async function getCase(caseId: string, orgId: string) {
+  const { data, error } = await admin.from('cases')
+    .select('id, public_case_id, reporting_mode, status, classification, authority_code, submitted_at, updated_at')
+    .eq('id', caseId).eq('organization_id', orgId).eq('authority_code', 'SECRETARIAT').single();
+  if (error || !data) throw new Error('CASE_NOT_FOUND');
+  return data;
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method !== 'POST') return json({ error: 'Metode tidak diizinkan.' }, 405);
+  try {
+    const user = await requireUser(req);
+    const orgId = await requireSecretariat(user.id);
+    const body = await req.json().catch(() => ({}));
+    const action = String(body.action ?? 'LIST');
+
+    if (action === 'LIST') {
+      const { data: cases, error } = await admin.from('cases')
+        .select('id, public_case_id, reporting_mode, status, classification, authority_code, submitted_at')
+        .eq('organization_id', orgId).eq('authority_code', 'SECRETARIAT')
+        .neq('status', 'CLOSED').neq('status', 'OUT_OF_SCOPE')
+        .order('submitted_at', { ascending: false });
+      if (error) throw error;
+      const ids = (cases ?? []).map((c) => c.id);
+      const { data: reports } = ids.length ? await admin.from('case_reports').select('case_id,title').in('case_id', ids) : { data: [] } as any;
+      const titles = new Map((reports ?? []).map((r: any) => [r.case_id, r.title]));
+      return json({ cases: (cases ?? []).map((c) => ({ ...c, title: titles.get(c.id) ?? c.public_case_id })) });
+    }
+
+    const caseId = String(body.caseId ?? '');
+    if (!caseId) return json({ error: 'Case ID wajib.' }, 400);
+    const caseRow = await getCase(caseId, orgId);
+
+    if (action === 'DETAIL') {
+      const [{ data: report }, { data: messages }, { data: team }] = await Promise.all([
+        admin.from('case_reports').select('*').eq('case_id', caseId).single(),
+        admin.from('case_messages').select('id,sender_type,body,visible_to_reporter,created_at').eq('case_id', caseId).order('created_at', { ascending: true }),
+        admin.from('case_team_members').select('id,email,display_name,member_category,committee_role,rationale,conflict_context,nomination_status,linked_user_id,nominated_at,declaration_at').eq('case_id', caseId).neq('nomination_status','REVOKED').order('nominated_at', { ascending: true }),
+      ]);
+      return json({ case: caseRow, report, messages: messages ?? [], team: team ?? [] });
+    }
+
+    if (caseRow.status !== 'COMMITTEE_FORMATION') return json({ error: 'Pembentukan tim hanya dapat diubah saat status Menunggu Pembentukan Tim.' }, 409);
+
+    if (action === 'ADD_MEMBER') {
+      const email = String(body.email ?? '').trim().toLowerCase();
+      const displayName = String(body.displayName ?? '').trim().slice(0, 200) || null;
+      const memberCategory = String(body.memberCategory ?? '');
+      const committeeRole = String(body.committeeRole ?? '');
+      const rationale = String(body.rationale ?? '').trim();
+      const conflictContext = String(body.conflictContext ?? '').trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'Email kandidat tidak valid.' }, 400);
+      if (!['DS','MANAGEMENT','STAFF','OTS','EXTERNAL'].includes(memberCategory)) return json({ error: 'Kategori anggota tidak valid.' }, 400);
+      if (!['CASE_LEAD','INVESTIGATOR','SUBJECT_MATTER_ADVISER'].includes(committeeRole)) return json({ error: 'Peran tim tidak valid.' }, 400);
+      if (rationale.length < 5) return json({ error: 'Alasan pemilihan kandidat wajib diisi.' }, 400);
+      if (conflictContext.length < 3) return json({ error: 'Konteks conflict check wajib diisi agar kandidat dapat menilai independensinya.' }, 400);
+      const { data: member, error } = await admin.from('case_team_members').insert({
+        case_id: caseId, email, display_name: displayName, member_category: memberCategory, committee_role: committeeRole,
+        rationale, conflict_context: conflictContext, nomination_status: 'PENDING_ACCOUNT', nominated_by: user.id,
+      }).select('id,email,display_name,member_category,committee_role,nomination_status,nominated_at').single();
+      if (error) {
+        if ((error as any).code === '23505') return json({ error: 'Email ini sudah menjadi kandidat aktif pada laporan ini.' }, 409);
+        throw error;
+      }
+      await admin.from('audit_logs').insert({ organization_id: orgId, case_id: caseId, actor_user_id: user.id, event_type: 'TEAM_MEMBER_NOMINATED', object_type: 'case_team_member', object_id: member.id, details: { committee_role: committeeRole, member_category: memberCategory } });
+      return json({ ok: true, member });
+    }
+
+    if (action === 'REVOKE_MEMBER') {
+      const memberId = String(body.memberId ?? '');
+      const { data: member, error } = await admin.from('case_team_members').select('id,linked_user_id').eq('id', memberId).eq('case_id', caseId).neq('nomination_status','REVOKED').single();
+      if (error || !member) return json({ error: 'Kandidat tidak ditemukan.' }, 404);
+      await admin.from('case_team_members').update({ nomination_status: 'REVOKED', revoked_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', memberId);
+      if (member.linked_user_id) await admin.from('case_assignments').update({ access_status: 'REVOKED', revoked_at: new Date().toISOString() }).eq('case_id', caseId).eq('user_id', member.linked_user_id);
+      await admin.from('audit_logs').insert({ organization_id: orgId, case_id: caseId, actor_user_id: user.id, event_type: 'TEAM_MEMBER_REVOKED', object_type: 'case_team_member', object_id: memberId, details: {} });
+      return json({ ok: true });
+    }
+
+    if (action === 'ACTIVATE_TEAM') {
+      const { data: team, error } = await admin.from('case_team_members')
+        .select('id,linked_user_id,committee_role,nomination_status')
+        .eq('case_id', caseId).eq('nomination_status', 'CLEARED');
+      if (error) throw error;
+      const investigators = (team ?? []).filter((m) => m.linked_user_id && ['CASE_LEAD','INVESTIGATOR'].includes(m.committee_role));
+      const distinctUsers = new Set(investigators.map((m) => m.linked_user_id));
+      const hasLead = investigators.some((m) => m.committee_role === 'CASE_LEAD');
+      if (distinctUsers.size < 2) return json({ error: 'Tim Pemeriksa membutuhkan minimum 2 orang berbeda yang telah lolos deklarasi benturan kepentingan.' }, 409);
+      if (!hasLead) return json({ error: 'Tim Pemeriksa harus memiliki minimal satu Ketua Tim.' }, 409);
+
+      const clearedUsers = [...new Set((team ?? []).filter((m) => m.linked_user_id).map((m) => m.linked_user_id))];
+      if (clearedUsers.length) await admin.from('case_assignments').update({ access_status: 'ACTIVE', revoked_at: null }).eq('case_id', caseId).in('user_id', clearedUsers);
+      await admin.from('cases').update({ status: 'INVESTIGATION', updated_at: new Date().toISOString() }).eq('id', caseId);
+      await admin.from('audit_logs').insert({ organization_id: orgId, case_id: caseId, actor_user_id: user.id, event_type: 'TEAM_ACTIVATED', object_type: 'case', object_id: caseId, details: { investigator_count: distinctUsers.size, cleared_member_count: clearedUsers.length } });
+      return json({ ok: true, nomorLaporan: caseRow.public_case_id, status: 'INVESTIGATION', investigatorCount: distinctUsers.size });
+    }
+
+    return json({ error: 'Aksi tidak dikenali.' }, 400);
+  } catch (error) {
+    console.error('secretariat-team-action', error);
+    const code = error instanceof Error ? error.message : '';
+    if (code === 'UNAUTHENTICATED') return json({ error: 'Silakan masuk terlebih dahulu.' }, 401);
+    if (code === 'FORBIDDEN') return json({ error: 'Akun ini tidak memiliki kewenangan Sekretariat DS.' }, 403);
+    if (code === 'CASE_NOT_FOUND') return json({ error: 'Laporan tidak ditemukan atau tidak berada di bawah kewenangan Sekretariat DS.' }, 404);
+    return json({ error: 'Aksi Sekretariat belum dapat diproses.' }, 400);
+  }
+});
