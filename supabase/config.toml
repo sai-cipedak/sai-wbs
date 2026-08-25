@@ -1,0 +1,4 @@
+project_id = "sai-wbs"
+
+[functions.health]
+verify_jwt = false
