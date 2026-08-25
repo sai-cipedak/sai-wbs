@@ -16,6 +16,7 @@ const STATUS_LABELS = {
 const TEAM_STATUS = {
   PENDING_ACCOUNT: 'Menunggu kandidat masuk', PENDING_DECLARATION: 'Menunggu deklarasi', CLEARED: 'Lolos conflict check', CONFLICT: 'Ada kemungkinan benturan kepentingan', REVOKED: 'Dicabut',
 };
+const ACCESS_STATUS = { ACTIVE: 'Aktif', PENDING: 'Menunggu aktivasi', REVOKED: 'Dicabut' };
 const TEAM_ROLE = { CASE_LEAD: 'Ketua Tim', INVESTIGATOR: 'Pemeriksa', SUBJECT_MATTER_ADVISER: 'Subject Matter Adviser' };
 const CATEGORY = { DS: 'DS', MANAGEMENT: 'Management', STAFF: 'Staff', OTS: 'OTS', EXTERNAL: 'Pihak Eksternal' };
 
@@ -93,6 +94,8 @@ function renderDetail(c, report, messages, team) {
     const card = el('div', null, 'team-member-card');
     const top = el('div', null, 'status-head'); top.append(el('strong', m.display_name || m.email), el('span', TEAM_STATUS[m.nomination_status] ?? m.nomination_status, 'status-badge')); card.append(top);
     card.append(el('p', `${TEAM_ROLE[m.committee_role] ?? m.committee_role} · ${CATEGORY[m.member_category] ?? m.member_category}`,'muted'), el('p', m.email));
+    const access = ACCESS_STATUS[m.assignment_status] ?? (m.nomination_status === 'CLEARED' ? 'Belum aktif' : 'Belum tersedia');
+    card.append(el('p', `Akses case: ${access}`, m.assignment_status === 'ACTIVE' ? 'assignment-active' : 'muted'));
     if (c.status === 'COMMITTEE_FORMATION' && m.nomination_status !== 'REVOKED') { const revoke=el('button','Cabut penunjukan','text-button'); revoke.type='button'; revoke.addEventListener('click',()=>revokeMember(c.id,m.id)); card.append(revoke); }
     teamSection.append(card);
   }
