@@ -1,0 +1,128 @@
+import { supabaseClient } from './supabase-client.js';
+
+const loginPanel = document.querySelector('#loginPanel');
+const dashboardPanel = document.querySelector('#dashboardPanel');
+const loginMessage = document.querySelector('#loginMessage');
+const userLabel = document.querySelector('#userLabel');
+const caseList = document.querySelector('#caseList');
+const caseDetail = document.querySelector('#caseDetail');
+const pageMessage = document.querySelector('#pageMessage');
+let cases = [];
+let selectedCaseId = null;
+
+const STATUS_LABELS = {
+  COMMITTEE_FORMATION: 'Menunggu Pembentukan Tim', INVESTIGATION: 'Pemeriksaan Sedang Berlangsung', AUTHORITY_REVIEW: 'Hasil Sedang Ditinjau', REMEDIATION: 'Tindak Lanjut',
+};
+const TEAM_STATUS = {
+  PENDING_ACCOUNT: 'Menunggu kandidat masuk', PENDING_DECLARATION: 'Menunggu deklarasi', CLEARED: 'Lolos conflict check', CONFLICT: 'Ada kemungkinan benturan kepentingan', REVOKED: 'Dicabut',
+};
+const TEAM_ROLE = { CASE_LEAD: 'Ketua Tim', INVESTIGATOR: 'Pemeriksa', SUBJECT_MATTER_ADVISER: 'Subject Matter Adviser' };
+const CATEGORY = { DS: 'DS', MANAGEMENT: 'Management', STAFF: 'Staff', OTS: 'OTS', EXTERNAL: 'Pihak Eksternal' };
+
+function el(tag, text, className) { const n = document.createElement(tag); if (text != null) n.textContent = text; if (className) n.className = className; return n; }
+function fmtDate(v) { return v ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(v)) : '—'; }
+function showMessage(text, kind = 'info') { pageMessage.textContent = text; pageMessage.className = `form-message internal-message ${kind}`; pageMessage.hidden = !text; }
+async function invoke(body) {
+  const { data, error } = await supabaseClient.functions.invoke('secretariat-team-action', { body });
+  if (error) {
+    let detail = error.message;
+    try { const context = await error.context?.json(); if (context?.error) detail = context.error; } catch (_) {}
+    throw new Error(detail || 'Aksi belum dapat diproses.');
+  }
+  return data;
+}
+
+async function authorize() {
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session?.user) { loginPanel.hidden = false; dashboardPanel.hidden = true; return; }
+  userLabel.textContent = session.user.email || 'Akun Sekretariat';
+  try {
+    loginPanel.hidden = true; dashboardPanel.hidden = false; await loadCases();
+  } catch (error) {
+    loginPanel.hidden = false; dashboardPanel.hidden = true;
+    loginMessage.textContent = error instanceof Error ? error.message : 'Akun belum memiliki kewenangan Sekretariat DS.';
+    loginMessage.className = 'form-message error'; loginMessage.hidden = false;
+  }
+}
+
+async function loadCases() {
+  showMessage('');
+  const data = await invoke({ action: 'LIST' });
+  cases = data.cases ?? [];
+  renderCaseList();
+  if (selectedCaseId && cases.some((c) => c.id === selectedCaseId)) await loadDetail(selectedCaseId);
+  else if (cases.length) await loadDetail(cases[0].id);
+  else caseDetail.replaceChildren(el('p', 'Tidak ada kasus aktif di bawah kewenangan Sekretariat DS.', 'empty-state'));
+}
+
+function renderCaseList() {
+  caseList.replaceChildren();
+  if (!cases.length) return caseList.append(el('p', 'Tidak ada kasus aktif.', 'empty-state'));
+  for (const c of cases) {
+    const b = el('button', null, `case-list-button${c.id === selectedCaseId ? ' active' : ''}`); b.type = 'button';
+    b.append(el('strong', c.public_case_id), el('span', c.title), el('span', STATUS_LABELS[c.status] ?? c.status));
+    b.addEventListener('click', () => loadDetail(c.id)); caseList.append(b);
+  }
+}
+
+async function loadDetail(caseId) {
+  selectedCaseId = caseId; renderCaseList(); showMessage('');
+  const data = await invoke({ action: 'DETAIL', caseId });
+  renderDetail(data.case, data.report, data.messages ?? [], data.team ?? []);
+}
+
+function renderDetail(c, report, messages, team) {
+  caseDetail.replaceChildren();
+  const head = el('section', null, 'case-section');
+  const h = el('div', null, 'status-head'); h.append(el('h2', report?.title ?? c.public_case_id), el('span', STATUS_LABELS[c.status] ?? c.status, 'status-badge')); head.append(h);
+  const meta = el('div', null, 'case-meta');
+  [['Nomor Laporan', c.public_case_id], ['Pelapor', c.reporting_mode === 'ANONYMOUS' ? 'Tanpa Identitas' : 'Identitas Dirahasiakan'], ['Klasifikasi', 'Pelanggaran Integritas'], ['Diterima', fmtDate(c.submitted_at)]].forEach(([k,v]) => { const x=el('div'); x.append(el('span',k),el('strong',v)); meta.append(x); });
+  head.append(meta); caseDetail.append(head);
+
+  const story = el('section', null, 'case-section'); story.append(el('h3','Ringkasan laporan'), el('p', report?.narrative ?? '—','case-copy')); caseDetail.append(story);
+
+  const comm = el('section', null, 'case-section'); comm.append(el('h3','Komunikasi dengan pelapor'));
+  if (!messages.length) comm.append(el('p','Belum ada pesan.','muted'));
+  messages.forEach((m) => { const box=el('div',null,'message-item'); box.append(el('strong',m.sender_type==='REPORTER'?'Pelapor':'Tim Penanganan'),el('p',m.body),el('small',fmtDate(m.created_at))); comm.append(box); });
+  caseDetail.append(comm);
+
+  const teamSection = el('section', null, 'case-section');
+  const teamHead = el('div', null, 'status-head'); teamHead.append(el('h3','Tim Pemeriksa'), el('span', `${team.filter((m)=>m.nomination_status==='CLEARED' && ['CASE_LEAD','INVESTIGATOR'].includes(m.committee_role)).length} cleared`, 'status-badge')); teamSection.append(teamHead);
+  if (!team.length) teamSection.append(el('p','Belum ada kandidat Tim Pemeriksa.','muted'));
+  for (const m of team) {
+    const card = el('div', null, 'team-member-card');
+    const top = el('div', null, 'status-head'); top.append(el('strong', m.display_name || m.email), el('span', TEAM_STATUS[m.nomination_status] ?? m.nomination_status, 'status-badge')); card.append(top);
+    card.append(el('p', `${TEAM_ROLE[m.committee_role] ?? m.committee_role} · ${CATEGORY[m.member_category] ?? m.member_category}`,'muted'), el('p', m.email));
+    if (c.status === 'COMMITTEE_FORMATION' && m.nomination_status !== 'REVOKED') { const revoke=el('button','Cabut penunjukan','text-button'); revoke.type='button'; revoke.addEventListener('click',()=>revokeMember(c.id,m.id)); card.append(revoke); }
+    teamSection.append(card);
+  }
+
+  if (c.status === 'COMMITTEE_FORMATION') {
+    const form = el('div', null, 'action-card'); form.append(el('h3','Tambah kandidat'));
+    const name=input('Nama kandidat','text','Nama lengkap (opsional)');
+    const email=input('Email Google kandidat','email','nama@gmail.com');
+    const category=select('Kategori anggota',[['DS','DS'],['MANAGEMENT','Management'],['STAFF','Staff'],['OTS','OTS'],['EXTERNAL','Pihak Eksternal']]);
+    const role=select('Peran dalam tim',[['CASE_LEAD','Ketua Tim'],['INVESTIGATOR','Pemeriksa'],['SUBJECT_MATTER_ADVISER','Subject Matter Adviser']]);
+    const rationale=textarea('Kompetensi / alasan pemilihan','Contoh: memahami proses pengadaan dan tidak berada dalam garis pelaporan pihak terlapor.');
+    const context=textarea('Konteks untuk conflict check','Masukkan hanya konteks minimum yang dibutuhkan kandidat untuk menilai benturan kepentingan, misalnya nama pihak terkait atau unit.');
+    form.append(name.wrap,email.wrap,category.wrap,role.wrap,rationale.wrap,context.wrap);
+    const add=el('button','Tambahkan kandidat','secondary'); add.type='button'; add.addEventListener('click',()=>addMember(c.id,{displayName:name.field.value,email:email.field.value,memberCategory:category.field.value,committeeRole:role.field.value,rationale:rationale.field.value,conflictContext:context.field.value})); form.append(add); teamSection.append(form);
+
+    const activate = el('div', null, 'action-card'); activate.append(el('h3','Aktifkan Tim Pemeriksa'),el('p','Sistem hanya akan mengaktifkan tim jika minimal 2 orang berbeda (Ketua Tim/Pemeriksa) sudah menyatakan tidak memiliki benturan kepentingan.','muted'));
+    const btn=el('button','Aktifkan Tim Pemeriksa','primary'); btn.type='button'; btn.addEventListener('click',()=>activateTeam(c.id)); activate.append(btn); teamSection.append(activate);
+  }
+  caseDetail.append(teamSection);
+}
+
+function input(label,type,placeholder){const wrap=document.createElement('label');wrap.textContent=label;const field=document.createElement('input');field.type=type;field.placeholder=placeholder;wrap.append(field);return{wrap,field};}
+function textarea(label,placeholder){const wrap=document.createElement('label');wrap.textContent=label;const field=document.createElement('textarea');field.rows=3;field.placeholder=placeholder;wrap.append(field);return{wrap,field};}
+function select(label,opts){const wrap=document.createElement('label');wrap.textContent=label;const field=document.createElement('select');opts.forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;field.append(o)});wrap.append(field);return{wrap,field};}
+
+async function addMember(caseId,payload){try{showMessage('Menambahkan kandidat...');await invoke({action:'ADD_MEMBER',caseId,...payload});showMessage('Kandidat berhasil ditambahkan.');await loadDetail(caseId);}catch(e){showMessage(e.message,'error')}}
+async function revokeMember(caseId,memberId){if(!confirm('Cabut penunjukan kandidat ini?'))return;try{await invoke({action:'REVOKE_MEMBER',caseId,memberId});showMessage('Penunjukan dicabut.');await loadDetail(caseId);}catch(e){showMessage(e.message,'error')}}
+async function activateTeam(caseId){try{showMessage('Memeriksa kelengkapan tim...');const data=await invoke({action:'ACTIVATE_TEAM',caseId});showMessage(`Tim aktif dengan ${data.investigatorCount} pemeriksa.`);await loadCases();}catch(e){showMessage(e.message,'error')}}
+
+document.querySelector('#googleLogin')?.addEventListener('click', async()=>{const redirectTo=new URL('secretariat.html',window.location.href).href;const{error}=await supabaseClient.auth.signInWithOAuth({provider:'google',options:{redirectTo}});if(error){loginMessage.textContent=error.message;loginMessage.hidden=false;}});
+document.querySelector('#logoutButton')?.addEventListener('click',async()=>{await supabaseClient.auth.signOut();location.reload();});
+document.querySelector('#refreshButton')?.addEventListener('click',loadCases);
+await authorize();
