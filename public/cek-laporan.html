@@ -23,6 +23,14 @@
   <section id="reportResult" class="result-card" hidden>
     <div class="status-head"><div><p class="eyebrow">Status laporan</p><h2 id="resultTitle"></h2></div><span id="resultStatus" class="status-badge"></span></div>
     <dl class="summary-list"><div><dt>Nomor Laporan</dt><dd id="resultCaseNumber"></dd></div><div><dt>Klasifikasi</dt><dd id="resultClassification"></dd></div><div><dt>Diterima</dt><dd id="resultDate"></dd></div></dl>
+
+    <div id="resultFinalOutcome" class="notice" hidden>
+      <h3>Hasil Akhir</h3>
+      <div id="resultOutcomeList"></div>
+      <p id="resultOutcomeSummary"></p>
+      <small id="resultOutcomeDate" class="muted"></small>
+    </div>
+
     <h3>Pesan</h3><div id="resultMessages"></div>
     <form id="replyForm" class="report-form" hidden>
       <label>Kirim pesan kepada tim penanganan<textarea name="pesan" rows="4" maxlength="5000" required placeholder="Tambahkan informasi atau jawab pertanyaan tim penanganan."></textarea></label>
