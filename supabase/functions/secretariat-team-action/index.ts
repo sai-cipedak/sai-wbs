@@ -62,12 +62,18 @@ Deno.serve(async (req: Request) => {
     const caseRow = await getCase(caseId, orgId);
 
     if (action === 'DETAIL') {
-      const [{ data: report }, { data: messages }, { data: team }] = await Promise.all([
+      const [{ data: report }, { data: messages }, { data: team }, { data: assignments }] = await Promise.all([
         admin.from('case_reports').select('*').eq('case_id', caseId).single(),
         admin.from('case_messages').select('id,sender_type,body,visible_to_reporter,created_at').eq('case_id', caseId).order('created_at', { ascending: true }),
         admin.from('case_team_members').select('id,email,display_name,member_category,committee_role,rationale,conflict_context,nomination_status,linked_user_id,nominated_at,declaration_at').eq('case_id', caseId).neq('nomination_status','REVOKED').order('nominated_at', { ascending: true }),
+        admin.from('case_assignments').select('user_id,assignment_role,access_status').eq('case_id', caseId),
       ]);
-      return json({ case: caseRow, report, messages: messages ?? [], team: team ?? [] });
+      const assignmentMap = new Map((assignments ?? []).map((a: any) => [`${a.user_id}|${a.assignment_role}`, a.access_status]));
+      const enrichedTeam = (team ?? []).map((m: any) => ({
+        ...m,
+        assignment_status: m.linked_user_id ? (assignmentMap.get(`${m.linked_user_id}|${m.committee_role}`) ?? null) : null,
+      }));
+      return json({ case: caseRow, report, messages: messages ?? [], team: enrichedTeam });
     }
 
     if (caseRow.status !== 'COMMITTEE_FORMATION') return json({ error: 'Pembentukan tim hanya dapat diubah saat status Menunggu Pembentukan Tim.' }, 409);
