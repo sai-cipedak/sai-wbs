@@ -17,3 +17,9 @@ verify_jwt = false
 
 [functions.triage-case-action]
 verify_jwt = true
+
+[functions.secretariat-team-action]
+verify_jwt = true
+
+[functions.team-member-declaration]
+verify_jwt = true
