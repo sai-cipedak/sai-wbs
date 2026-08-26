@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Dashboard follow-up 30/60/90 hari untuk kasus yang ditutup oleh Dekom." />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Follow-up Dekom — SAI Cipedak</title>
+  <link rel="stylesheet" href="assets/css/app.css" />
+  <link rel="stylesheet" href="assets/css/followup.css" />
+  <script src="assets/js/config.js"></script>
+</head>
+<body>
+<header><div class="container header-inner"><a class="brand" href="index.html">SAI Cipedak</a><div class="pill">Dekom</div></div></header>
+<main class="container">
+  <section id="loginPanel" class="form-card compact-form" hidden>
+    <h1 class="internal-title">Follow-up Pasca Penutupan Dekom</h1>
+    <p>Masuk dengan akun Google yang memiliki kewenangan Dekom.</p>
+    <button id="googleLogin" class="primary" type="button">Masuk dengan Google</button>
+    <div id="loginMessage" class="form-message" hidden></div>
+  </section>
+
+  <section id="dashboardPanel" hidden>
+    <div class="internal-toolbar">
+      <div>
+        <p class="eyebrow">Workspace internal Dekom</p>
+        <h1 class="internal-title">Follow-up Pasca Penutupan</h1>
+        <p class="muted" id="userLabel"></p>
+      </div>
+      <div class="action-row">
+        <a class="button secondary" href="dekom.html">Kasus Dekom</a>
+        <button id="refreshButton" type="button" class="secondary">Segarkan</button>
+        <button id="logoutButton" type="button" class="text-button">Keluar</button>
+      </div>
+    </div>
+
+    <div id="pageMessage" class="form-message internal-message" hidden></div>
+
+    <section class="followup-stats" aria-label="Ringkasan follow-up Dekom">
+      <div class="followup-stat"><span>Upcoming</span><strong id="countUpcoming">0</strong></div>
+      <div class="followup-stat"><span>Due Soon</span><strong id="countDueSoon">0</strong></div>
+      <div class="followup-stat"><span>Overdue</span><strong id="countOverdue">0</strong></div>
+      <div class="followup-stat"><span>Open Escalation</span><strong id="countEscalations">0</strong></div>
+    </section>
+
+    <div class="notice">Hanya follow-up dari kasus yang ditutup dalam kewenangan <strong>Dekom</strong> yang tampil di sini. Status jatuh tempo dihitung langsung dari <strong>due_at</strong>.</div>
+    <section id="followupList" class="followup-list" aria-live="polite"></section>
+  </section>
+</main>
+<footer class="container">SAI Cipedak · Portal Pelaporan</footer>
+<script type="module" src="assets/js/dekom-followup.js?v=20260826-1"></script>
+</body>
+</html>
