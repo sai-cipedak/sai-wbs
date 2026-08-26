@@ -35,3 +35,9 @@ verify_jwt = true
 
 [functions.dekom-followup-action]
 verify_jwt = true
+
+[functions.admin-user-access-action]
+verify_jwt = true
+
+[functions.claim-internal-access]
+verify_jwt = true
