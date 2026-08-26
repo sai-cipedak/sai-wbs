@@ -32,7 +32,7 @@ Deno.serve(async (req: Request) => {
       if (error) throw error;
 
       const caseIds = [...new Set((members ?? []).map((m) => m.case_id))];
-      const { data: cases } = caseIds.length ? await admin.from('cases').select('id,public_case_id,classification,status,organization_id').in('id', caseIds) : { data: [] } as any;
+      const { data: cases } = caseIds.length ? await admin.from('cases').select('id,public_case_id,classification,status,organization_id,authority_code').in('id', caseIds) : { data: [] } as any;
       const caseMap = new Map((cases ?? []).map((c: any) => [c.id, c]));
 
       const { data: assignments } = caseIds.length
@@ -69,6 +69,7 @@ Deno.serve(async (req: Request) => {
           nomorLaporan: c?.public_case_id ?? null,
           classification: c?.classification ?? null,
           caseStatus: c?.status ?? null,
+          authorityCode: c?.authority_code ?? null,
           displayName: m.display_name,
           memberCategory: m.member_category,
           committeeRole: m.committee_role,
@@ -89,12 +90,12 @@ Deno.serve(async (req: Request) => {
       if (!['NO_CONFLICT','POSSIBLE_CONFLICT'].includes(declaration)) return json({ error: 'Pilih hasil deklarasi benturan kepentingan.' }, 400);
 
       const { data: member, error } = await admin.from('case_team_members')
-        .select('id,case_id,email,committee_role,nomination_status')
+        .select('id,case_id,email,committee_role,nomination_status,nominated_by')
         .eq('id', memberId).eq('email', email).neq('nomination_status','REVOKED').single();
       if (error || !member) return json({ error: 'Penunjukan Tim Pemeriksa tidak ditemukan untuk akun ini.' }, 404);
       if (['CLEARED','CONFLICT'].includes(member.nomination_status)) return json({ error: 'Deklarasi untuk penunjukan ini sudah disampaikan.' }, 409);
 
-      const { data: caseRow, error: caseError } = await admin.from('cases').select('id,organization_id,public_case_id,status').eq('id', member.case_id).single();
+      const { data: caseRow, error: caseError } = await admin.from('cases').select('id,organization_id,public_case_id,status,authority_code').eq('id', member.case_id).single();
       if (caseError || !caseRow) return json({ error: 'Laporan tidak ditemukan.' }, 404);
       if (caseRow.status !== 'COMMITTEE_FORMATION') return json({ error: 'Pembentukan Tim Pemeriksa untuk laporan ini sudah tidak terbuka.' }, 409);
 
@@ -104,7 +105,7 @@ Deno.serve(async (req: Request) => {
       if (declaration === 'POSSIBLE_CONFLICT') {
         await admin.from('case_team_members').update({ linked_user_id: user.id, nomination_status: 'CONFLICT', declaration_at: now, updated_at: now }).eq('id', memberId);
         await admin.from('case_assignments').update({ access_status: 'REVOKED', revoked_at: now }).eq('case_id', member.case_id).eq('user_id', user.id);
-        await admin.from('audit_logs').insert({ organization_id: caseRow.organization_id, case_id: member.case_id, actor_user_id: user.id, event_type: 'TEAM_MEMBER_CONFLICT_DECLARED', object_type: 'case_team_member', object_id: memberId, details: {} });
+        await admin.from('audit_logs').insert({ organization_id: caseRow.organization_id, case_id: member.case_id, actor_user_id: user.id, event_type: 'TEAM_MEMBER_CONFLICT_DECLARED', object_type: 'case_team_member', object_id: memberId, details: { authority_code: caseRow.authority_code } });
         return json({ ok: true, nomorLaporan: caseRow.public_case_id, nominationStatus: 'CONFLICT', accessGranted: false });
       }
 
@@ -114,12 +115,12 @@ Deno.serve(async (req: Request) => {
         user_id: user.id,
         assignment_role: member.committee_role,
         access_status: 'PENDING',
-        assigned_by: user.id,
+        assigned_by: member.nominated_by,
         assigned_at: now,
         revoked_at: null,
       }, { onConflict: 'case_id,user_id,assignment_role' });
-      await admin.from('audit_logs').insert({ organization_id: caseRow.organization_id, case_id: member.case_id, actor_user_id: user.id, event_type: 'TEAM_MEMBER_CONFLICT_CLEARED', object_type: 'case_team_member', object_id: memberId, details: { committee_role: member.committee_role } });
-      return json({ ok: true, nomorLaporan: caseRow.public_case_id, nominationStatus: 'CLEARED', accessGranted: false, note: 'Akses case baru aktif setelah Sekretariat mengaktifkan Tim Pemeriksa.' });
+      await admin.from('audit_logs').insert({ organization_id: caseRow.organization_id, case_id: member.case_id, actor_user_id: user.id, event_type: 'TEAM_MEMBER_CONFLICT_CLEARED', object_type: 'case_team_member', object_id: memberId, details: { committee_role: member.committee_role, authority_code: caseRow.authority_code } });
+      return json({ ok: true, nomorLaporan: caseRow.public_case_id, nominationStatus: 'CLEARED', accessGranted: false, note: 'Akses case baru aktif setelah otoritas kasus mengaktifkan Tim Pemeriksa.' });
     }
 
     return json({ error: 'Aksi tidak dikenali.' }, 400);
