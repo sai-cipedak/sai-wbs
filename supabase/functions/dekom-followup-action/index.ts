@@ -1,0 +1,34 @@
+import { createClient } from 'jsr:@supabase/supabase-js@2.112.4';
+const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST, OPTIONS'};
+const admin=createClient(Deno.env.get('SUPABASE_URL')??'',Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')??'',{auth:{persistSession:false,autoRefreshToken:false}});
+const json=(b:unknown,s=200)=>new Response(JSON.stringify(b),{status:s,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
+async function currentUser(req:Request){const t=(req.headers.get('Authorization')??'').replace(/^Bearer\s+/i,'');if(!t)throw new Error('UNAUTHENTICATED');const{data,error}=await admin.auth.getUser(t);if(error||!data.user)throw new Error('UNAUTHENTICATED');return data.user;}
+async function dekomOrg(uid:string){const now=new Date().toISOString();const{data,error}=await admin.from('user_system_roles').select('organization_id,active_from,active_until').eq('user_id',uid).eq('role_code','DEKOM').lte('active_from',now);if(error)throw error;const r=(data??[]).find((x:any)=>!x.active_until||x.active_until>now);if(!r)throw new Error('FORBIDDEN');return String(r.organization_id);}
+function effective(row:any){if(row.status==='COMPLETED'||row.status==='CANCELLED')return row.status;const due=new Date(row.due_at).getTime(),now=Date.now();if(due<now)return'OVERDUE';if(due<=now+3*86400000)return'DUE_SOON';return'UPCOMING';}
+Deno.serve(async(req)=>{if(req.method==='OPTIONS')return new Response('ok',{headers:cors});if(req.method!=='POST')return json({error:'Metode tidak diizinkan.'},405);try{
+ const user=await currentUser(req),orgId=await dekomOrg(user.id),body=await req.json().catch(()=>({})),action=String(body.action??'LIST_FOLLOWUPS');
+ if(action==='LIST_FOLLOWUPS'){
+  const{data:cases,error:ce}=await admin.from('cases').select('id,public_case_id,classification,reporting_mode,closed_at,status,authority_code').eq('organization_id',orgId).eq('authority_code','DEKOM').eq('status','CLOSED').order('closed_at',{ascending:false});if(ce)throw ce;
+  const ids=(cases??[]).map((x:any)=>x.id);if(!ids.length)return json({followups:[],counts:{upcoming:0,dueSoon:0,overdue:0,openEscalations:0}});
+  const[{data:fu,error:fe},{data:reports}]=await Promise.all([
+   admin.from('case_followups').select('id,case_id,closure_id,day_offset,due_at,status,owner_authority_code,check_method,outcome,risk_level,notes,completed_at,escalation_required,escalation_note,escalation_status,escalation_resolution_note,escalation_resolved_at,escalation_resolution_mode,linked_case_id').in('case_id',ids).eq('owner_authority_code','DEKOM').order('due_at'),
+   admin.from('case_reports').select('case_id,title').in('case_id',ids)
+  ]);if(fe)throw fe;
+  const linkedIds=[...new Set((fu??[]).map((x:any)=>x.linked_case_id).filter(Boolean))];const{data:linked}=linkedIds.length?await admin.from('cases').select('id,public_case_id,status,authority_code').in('id',linkedIds):{data:[]} as any;
+  const cm=new Map((cases??[]).map((c:any)=>[c.id,c])),tm=new Map((reports??[]).map((r:any)=>[r.case_id,r.title])),lm=new Map((linked??[]).map((c:any)=>[c.id,c]));
+  const rows=(fu??[]).map((f:any)=>{const c:any=cm.get(f.case_id);return{...f,effective_status:effective(f),public_case_id:c.public_case_id,classification:c.classification,reporting_mode:c.reporting_mode,closed_at:c.closed_at,title:tm.get(f.case_id)??c.public_case_id,linked_case:f.linked_case_id?(lm.get(f.linked_case_id)??null):null};});
+  return json({followups:rows,counts:{upcoming:rows.filter((x:any)=>x.effective_status==='UPCOMING').length,dueSoon:rows.filter((x:any)=>x.effective_status==='DUE_SOON').length,overdue:rows.filter((x:any)=>x.effective_status==='OVERDUE').length,openEscalations:rows.filter((x:any)=>x.escalation_status==='OPEN').length}});
+ }
+ const caseId=String(body.caseId??''),followupId=String(body.followupId??'');if(!caseId||!followupId)return json({error:'Case dan follow-up wajib dipilih.'},400);
+ const{data:c,error:ce}=await admin.from('cases').select('id,status,authority_code').eq('id',caseId).eq('organization_id',orgId).eq('authority_code','DEKOM').single();if(ce||!c)return json({error:'Kasus Dekom tidak ditemukan.'},404);if(c.status!=='CLOSED')return json({error:'Follow-up hanya berlaku untuk kasus yang sudah ditutup.'},409);
+ const{data:f,error:fe}=await admin.from('case_followups').select('id,owner_authority_code').eq('id',followupId).eq('case_id',caseId).eq('owner_authority_code','DEKOM').single();if(fe||!f)return json({error:'Follow-up Dekom tidak ditemukan.'},404);
+ if(action==='COMPLETE_FOLLOWUP'){
+  const{data,error}=await admin.rpc('complete_case_followup',{p_followup_id:followupId,p_actor_user_id:user.id,p_organization_id:orgId,p_check_method:String(body.checkMethod??''),p_outcome:String(body.outcome??''),p_risk_level:String(body.riskLevel??''),p_notes:String(body.notes??'').trim(),p_escalation_note:String(body.escalationNote??'').trim()||null});
+  if(error){const m=error.message||'';if(m.includes('FOLLOWUP_FORBIDDEN'))return json({error:'Follow-up ini bukan kewenangan Dekom.'},403);if(m.includes('FOLLOWUP_ALREADY_COMPLETED'))return json({error:'Follow-up ini sudah diproses.'},409);if(m.includes('ESCALATION_NOTE_REQUIRED'))return json({error:'Temuan ini memerlukan catatan eskalasi.'},400);if(m.includes('NOTES_REQUIRED'))return json({error:'Catatan follow-up wajib 5–5.000 karakter.'},400);if(m.includes('CASE_NOT_CLOSED'))return json({error:'Kasus tidak lagi berada dalam status tertutup.'},409);throw error;}return json(data);
+ }
+ if(action==='RESOLVE_FOLLOWUP_ESCALATION'){
+  const{data,error}=await admin.rpc('resolve_case_followup_escalation',{p_followup_id:followupId,p_actor_user_id:user.id,p_organization_id:orgId,p_resolution_note:String(body.resolutionNote??'').trim()});
+  if(error){const m=error.message||'';if(m.includes('FOLLOWUP_FORBIDDEN'))return json({error:'Eskalasi ini bukan kewenangan Dekom.'},403);if(m.includes('LINKED_CASE_REQUIRED'))return json({error:'Eskalasi retaliation belum dapat ditutup sebelum linked case dibuat.'},409);if(m.includes('ESCALATION_NOT_OPEN'))return json({error:'Eskalasi terbuka tidak ditemukan.'},404);if(m.includes('RESOLUTION_REQUIRED'))return json({error:'Catatan resolution wajib 5–5.000 karakter.'},400);throw error;}return json(data);
+ }
+ return json({error:'Aksi tidak dikenali.'},400);
+}catch(e){console.error(e);const m=e instanceof Error?e.message:'';if(m==='UNAUTHENTICATED')return json({error:'Silakan masuk terlebih dahulu.'},401);if(m==='FORBIDDEN')return json({error:'Akun ini tidak memiliki kewenangan Dekom.'},403);return json({error:'Follow-up Dekom belum dapat diproses.'},400);}});
