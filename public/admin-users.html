@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <meta name="description" content="Administrasi pengguna dan akses internal Portal Pelaporan SAI Cipedak." />
+  <title>Admin Pengguna & Akses — SAI Cipedak</title>
+  <link rel="stylesheet" href="assets/css/app.css" />
+  <style>
+    .admin-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}.admin-stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px}.admin-stat span{display:block;color:var(--muted);font-size:12px}.admin-stat strong{display:block;font-size:26px;margin-top:4px}.admin-section{margin-top:22px}.admin-section-head{display:flex;justify-content:space-between;gap:14px;align-items:end;margin-bottom:12px}.admin-section-head h2{margin:0}.admin-user-grid{display:grid;gap:14px}.admin-user-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;display:grid;gap:14px}.admin-user-card.role-conflict{border-color:#f4b4ae;background:#fffafa}.admin-user-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.admin-user-head h3{margin:0 0 3px;font-size:17px}.admin-user-head p{margin:0}.role-list{display:flex;gap:8px;flex-wrap:wrap}.role-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid #cfd9e6;border-radius:999px;padding:6px 9px;background:#f8fbff;font-size:12px;font-weight:700}.role-chip button{padding:0;background:transparent;color:var(--danger);font-size:16px;line-height:1}.user-admin-row{display:grid;grid-template-columns:minmax(180px,1fr) auto;gap:10px;align-items:end}.profile-state{padding:7px 10px;border-radius:999px;font-size:12px;font-weight:750;background:var(--success-soft);color:var(--success)}.profile-state.off{background:#f2f4f7;color:var(--muted)}.conflict-warning{padding:10px 12px;border-radius:10px;background:var(--danger-soft);color:var(--danger);font-size:13px}.pending-list{display:grid;gap:10px}.pending-card{display:flex;justify-content:space-between;gap:14px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:13px 14px;background:#fff}.pending-card p{margin:2px 0}.activation-link{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;word-break:break-all}.search-box{max-width:320px}.grant-grid{display:grid;grid-template-columns:1.3fr 1fr .8fr auto;gap:10px;align-items:end}.muted-small{color:var(--muted);font-size:12px}.danger-button{background:var(--danger-soft);color:var(--danger)}
+    @media(max-width:760px){.admin-stats{grid-template-columns:1fr}.admin-section-head,.admin-user-head,.pending-card{align-items:stretch;flex-direction:column}.grant-grid,.user-admin-row{grid-template-columns:1fr}.search-box{max-width:none}}
+  </style>
+  <script src="assets/js/config.js"></script>
+</head>
+<body>
+<header><div class="container header-inner"><a class="brand" href="index.html">SAI Cipedak</a><div class="pill">System Admin</div></div></header>
+<main class="container">
+  <section id="loginPanel" class="form-card compact-form" hidden>
+    <h1 class="internal-title">Admin Pengguna & Akses</h1>
+    <p>Masuk dengan akun Google yang memiliki role Administrator Sistem.</p>
+    <button id="googleLogin" class="primary" type="button">Masuk dengan Google</button>
+    <div id="loginMessage" class="form-message" hidden></div>
+  </section>
+
+  <section id="dashboardPanel" hidden>
+    <div class="internal-toolbar">
+      <div><p class="eyebrow">Production hardening</p><h1 class="internal-title">Admin Pengguna & Akses</h1><p class="muted" id="userLabel"></p></div>
+      <div class="action-row"><a class="button secondary" href="access.html">Halaman Aktivasi</a><button id="refreshButton" class="secondary" type="button">Segarkan</button><button id="logoutButton" class="text-button" type="button">Keluar</button></div>
+    </div>
+    <div id="pageMessage" class="form-message internal-message" hidden></div>
+    <div class="notice"><strong>Boundary:</strong> role <strong>SYSTEM_ADMIN</strong> mengelola akses teknis dan tidak otomatis memberi akses isi kasus. Role <strong>DEKOM</strong> tidak boleh aktif bersamaan dengan <strong>TRIAGE</strong> atau <strong>SECRETARIAT</strong>. Semua perubahan dicatat di audit trail.</div>
+
+    <section class="admin-stats" aria-label="Ringkasan pengguna">
+      <div class="admin-stat"><span>Pengguna aktif</span><strong id="countActive">0</strong></div>
+      <div class="admin-stat"><span>Pengguna nonaktif</span><strong id="countInactive">0</strong></div>
+      <div class="admin-stat"><span>Pending akses</span><strong id="countPending">0</strong></div>
+    </section>
+
+    <section class="admin-section form-card">
+      <div><p class="eyebrow">Onboarding</p><h2>Siapkan akses user baru</h2><p class="muted">Email belum perlu memiliki profile. Setelah grant dibuat, user membuka halaman Aktivasi dan login Google dengan email yang sama.</p></div>
+      <form id="grantForm" class="grant-grid">
+        <label>Email Google<input id="grantEmail" type="email" autocomplete="email" placeholder="nama@gmail.com" required /></label>
+        <label>Role<select id="grantRole" required></select></label>
+        <label>Berlaku sampai <input id="grantUntil" type="date" /></label>
+        <button class="primary" type="submit">Siapkan akses</button>
+      </form>
+      <p class="muted-small">Halaman aktivasi: <span class="activation-link">https://sai-cipedak.github.io/sai-wbs/access.html</span></p>
+      <div id="pendingGrantList" class="pending-list"></div>
+    </section>
+
+    <section class="admin-section">
+      <div class="admin-section-head"><div><p class="eyebrow">Existing users</p><h2>Pengguna internal</h2></div><label class="search-box">Cari pengguna<input id="userSearch" type="search" placeholder="Nama atau email" /></label></div>
+      <div id="userList" class="admin-user-grid"></div>
+    </section>
+  </section>
+</main>
+<footer class="container">SAI Cipedak · Portal Pelaporan</footer>
+<script type="module" src="assets/js/admin-users.js?v=20260826-1"></script>
+</body>
+</html>
