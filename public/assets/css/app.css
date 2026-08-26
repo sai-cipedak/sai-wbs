@@ -103,10 +103,17 @@ legend { width: 100%; margin-bottom: 10px; font-weight: 650; line-height: 1.45; 
 .case-meta span { color: var(--muted); font-size: 12px; }
 .action-card, .finding-card, .note-card, .evidence-card { display: grid; gap: 12px; border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-top: 14px; background: #fff; }
 .action-card h3, .finding-card h4, .note-card h4 { margin: 0; }
+.team-member-card { display: grid; gap: 10px; border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-top: 14px; background: var(--surface); box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.team-member-card .status-head { align-items: center; }
+.team-member-card .status-head strong { font-size: 16px; line-height: 1.35; }
+.team-member-card p { margin: 0; line-height: 1.5; }
+.team-member-card > p:not(.muted):not(.assignment-active) { word-break: break-word; }
+.team-member-card .text-button { justify-self: start; margin-top: 2px; }
+.assignment-active { color: var(--success); font-weight: 700; font-size: 13px; }
 .empty-state { color: var(--muted); padding: 8px 0; }
 .workspace-tabs { display: flex; gap: 6px; padding: 12px 18px 0; overflow-x: auto; background: var(--surface); }
 .workspace-tab { white-space: nowrap; background: transparent; color: var(--muted); border-radius: 8px 8px 0 0; border-bottom: 2px solid transparent; }
 .workspace-tab.active { color: var(--primary); background: var(--primary-soft); border-bottom-color: var(--primary); }
 .workspace-panels { background: var(--surface); }
 .workspace-panel { border-bottom: 0; }
-@media (max-width: 760px) { .grid, .two-col { grid-template-columns: 1fr; } main { padding-top: 38px; } .submit-row, .status-head, .internal-toolbar { align-items: stretch; flex-direction: column; } .summary-list div { grid-template-columns: 1fr; gap: 3px; } .internal-grid { grid-template-columns: 1fr; } .case-list-panel { position: static; } .case-meta { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .grid, .two-col { grid-template-columns: 1fr; } main { padding-top: 38px; } .submit-row, .status-head, .internal-toolbar { align-items: stretch; flex-direction: column; } .summary-list div { grid-template-columns: 1fr; gap: 3px; } .internal-grid { grid-template-columns: 1fr; } .case-list-panel { position: static; } .case-meta { grid-template-columns: 1fr; } .team-member-card .status-head { align-items: stretch; } }
