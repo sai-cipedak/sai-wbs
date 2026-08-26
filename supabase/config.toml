@@ -29,3 +29,6 @@ verify_jwt = true
 
 [functions.dekom-case-action]
 verify_jwt = true
+
+[functions.dekom-remediation-action]
+verify_jwt = true
