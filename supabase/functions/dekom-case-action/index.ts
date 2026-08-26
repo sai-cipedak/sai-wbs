@@ -16,23 +16,26 @@ if(action==='LIST'){
 const caseId=String(body.caseId??'');if(!caseId)return json({error:'Case ID wajib.'},400);
 const{data:c,error:ce}=await admin.from('cases').select('id,public_case_id,status,classification,priority,authority_code,reporting_mode,submitted_at,updated_at').eq('id',caseId).eq('organization_id',orgId).eq('authority_code','DEKOM').single();if(ce||!c)return json({error:'Kasus Dekom tidak ditemukan.'},404);
 if(action==='DETAIL'){
- const[{data:report},{data:ack},{data:link},{data:team},{data:assignments}]=await Promise.all([
+ const[{data:report},{data:ack},{data:link},{data:team},{data:assignments},{data:allegations},{data:findings},{data:reviews}]=await Promise.all([
   admin.from('case_reports').select('title,narrative,child_safety_risk,ongoing_risk,submitted_at').eq('case_id',caseId).single(),
   admin.from('case_dekom_acknowledgements').select('id,acknowledgement_note,acknowledged_at,acknowledged_by').eq('case_id',caseId).maybeSingle(),
   admin.from('case_links').select('source_case_id,source_followup_id,relation_type').eq('linked_case_id',caseId).eq('relation_type','RETALIATION_FOLLOWUP').maybeSingle(),
   admin.from('case_team_members').select('id,email,display_name,member_category,committee_role,nomination_status,linked_user_id,nominated_at,declaration_at').eq('case_id',caseId).neq('nomination_status','REVOKED').order('nominated_at'),
-  admin.from('case_assignments').select('user_id,assignment_role,access_status').eq('case_id',caseId)
+  admin.from('case_assignments').select('user_id,assignment_role,access_status').eq('case_id',caseId),
+  admin.from('case_allegations').select('id,sequence_no,statement,status').eq('case_id',caseId).eq('status','ACTIVE').order('sequence_no'),
+  admin.from('case_findings').select('id,allegation_id,finding_status,analysis_text,recommendation_text,updated_at').eq('case_id',caseId),
+  admin.from('case_authority_reviews').select('id,decision,review_notes,created_at').eq('case_id',caseId).order('created_at',{ascending:false})
  ]);
  let source=null;
  if(link){const[{data:sc},{data:fu}]=await Promise.all([admin.from('cases').select('public_case_id').eq('id',link.source_case_id).maybeSingle(),admin.from('case_followups').select('day_offset,outcome,risk_level,escalation_status,notes,escalation_note').eq('id',link.source_followup_id).maybeSingle()]);source={public_case_id:sc?.public_case_id??null,followup:fu??null};}
  const amap=new Map((assignments??[]).map((a:any)=>[`${a.user_id}|${a.assignment_role}`,a.access_status]));
- return json({case:c,report,acknowledgement:ack??null,source,team:(team??[]).map((m:any)=>({...m,assignment_status:m.linked_user_id?(amap.get(`${m.linked_user_id}|${m.committee_role}`)??null):null}))});
+ return json({case:c,report,acknowledgement:ack??null,source,team:(team??[]).map((m:any)=>({...m,assignment_status:m.linked_user_id?(amap.get(`${m.linked_user_id}|${m.committee_role}`)??null):null})),allegations:allegations??[],findings:findings??[],reviews:reviews??[]});
 }
 if(action==='ACKNOWLEDGE'){
  const note=String(body.note??'').trim();if(note.length<5||note.length>5000)return json({error:'Catatan penerimaan wajib 5–5.000 karakter.'},400);
  const{data,error}=await admin.rpc('acknowledge_dekom_takeover',{p_case_id:caseId,p_actor_user_id:user.id,p_organization_id:orgId,p_note:note});if(error){console.error(error);return json({error:'Pengambilalihan belum dapat diterima.'},409);}return json(data);
 }
-const ack=await acknowledgement(caseId);if(!ack)return json({error:'Dekom harus menerima pengambilalihan sebelum membentuk Tim Pemeriksa.'},409);
+const ack=await acknowledgement(caseId);if(!ack)return json({error:'Dekom harus menerima pengambilalihan sebelum melanjutkan penanganan.'},409);
 if(action==='ADD_MEMBER'){
  if(c.status!=='COMMITTEE_FORMATION')return json({error:'Tim hanya dapat dibentuk saat status Menunggu Pembentukan Tim.'},409);
  const email=String(body.email??'').trim().toLowerCase(),name=String(body.displayName??'').trim().slice(0,200)||null,cat=String(body.memberCategory??''),role=String(body.committeeRole??''),rationale=String(body.rationale??'').trim(),context=String(body.conflictContext??'').trim();
@@ -61,6 +64,18 @@ if(action==='ACTIVATE_TEAM'){
  const{data:updated,error:ue}=await admin.from('cases').update({status:'INVESTIGATION',updated_at:now}).eq('id',caseId).eq('status','COMMITTEE_FORMATION').eq('authority_code','DEKOM').select('id').maybeSingle();if(ue)throw ue;if(!updated)return json({error:'Status kasus berubah. Muat ulang halaman.'},409);
  await admin.from('audit_logs').insert({organization_id:orgId,case_id:caseId,actor_user_id:user.id,event_type:'TEAM_ACTIVATED',object_type:'case',object_id:caseId,details:{investigator_count:users.length,authority_code:'DEKOM'}});
  return json({ok:true,investigatorCount:users.length,status:'INVESTIGATION'});
+}
+if(action==='REVIEW_FINDINGS'){
+ if(c.status!=='AUTHORITY_REVIEW')return json({error:'Hasil pemeriksaan belum berada pada tahap review Dekom.'},409);
+ const decision=String(body.decision??''),notes=String(body.reviewNotes??'').trim();
+ if(!['APPROVED','RETURNED_FOR_REVISION'].includes(decision)||notes.length<5||notes.length>5000)return json({error:'Keputusan dan catatan review Dekom wajib diisi.'},400);
+ const[{data:a},{data:f}]=await Promise.all([admin.from('case_allegations').select('id').eq('case_id',caseId).eq('status','ACTIVE'),admin.from('case_findings').select('allegation_id').eq('case_id',caseId)]);
+ const done=new Set((f??[]).map((x:any)=>x.allegation_id));if(!(a??[]).length||(a??[]).some((x:any)=>!done.has(x.id)))return json({error:'Finding per dugaan belum lengkap.'},409);
+ const{data:r,error}=await admin.from('case_authority_reviews').insert({case_id:caseId,reviewer_user_id:user.id,decision,review_notes:notes}).select('id').single();if(error)throw error;
+ const next=decision==='APPROVED'?'REMEDIATION':'INVESTIGATION';
+ const{data:updated,error:ue}=await admin.from('cases').update({status:next,updated_at:new Date().toISOString()}).eq('id',caseId).eq('authority_code','DEKOM').eq('status','AUTHORITY_REVIEW').select('id').maybeSingle();if(ue)throw ue;if(!updated)return json({error:'Status kasus berubah saat review. Muat ulang halaman.'},409);
+ await admin.from('audit_logs').insert({organization_id:orgId,case_id:caseId,actor_user_id:user.id,event_type:decision==='APPROVED'?'FINDINGS_APPROVED':'FINDINGS_RETURNED_FOR_REVISION',object_type:'case_authority_review',object_id:r.id,details:{next_status:next,authority_code:'DEKOM'}});
+ return json({ok:true,status:next});
 }
 return json({error:'Aksi tidak dikenali.'},400);
 }catch(e){console.error(e);const m=e instanceof Error?e.message:'';if(m==='UNAUTHENTICATED')return json({error:'Silakan masuk terlebih dahulu.'},401);if(m==='FORBIDDEN')return json({error:'Akun ini tidak memiliki kewenangan Dekom.'},403);return json({error:'Workspace Dekom belum dapat diproses.'},400);}});
