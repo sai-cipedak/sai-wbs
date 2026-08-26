@@ -1,0 +1,52 @@
+import { createClient } from 'jsr:@supabase/supabase-js@2.112.4';
+const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST, OPTIONS'};
+const admin=createClient(Deno.env.get('SUPABASE_URL')??'',Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')??'',{auth:{persistSession:false,autoRefreshToken:false}});
+const json=(b:unknown,s=200)=>new Response(JSON.stringify(b),{status:s,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
+async function currentUser(req:Request){const t=(req.headers.get('Authorization')??'').replace(/^Bearer\s+/i,'');if(!t)throw new Error('UNAUTHENTICATED');const{data,error}=await admin.auth.getUser(t);if(error||!data.user)throw new Error('UNAUTHENTICATED');return data.user;}
+async function adminOrg(uid:string){const now=new Date().toISOString();const{data:roles,error}=await admin.from('user_system_roles').select('organization_id,active_until').eq('user_id',uid).eq('role_code','SYSTEM_ADMIN').lte('active_from',now);if(error)throw error;for(const r of roles??[]){if(r.active_until&&r.active_until<=now)continue;const{data:p}=await admin.from('profiles').select('is_active').eq('user_id',uid).eq('organization_id',r.organization_id).maybeSingle();if(p?.is_active)return String(r.organization_id);}throw new Error('FORBIDDEN');}
+function active(row:any){const now=Date.now();return new Date(row.active_from).getTime()<=now&&(!row.active_until||new Date(row.active_until).getTime()>now);}
+async function roleExists(code:string){const{data}=await admin.from('system_roles').select('code').eq('code',code).maybeSingle();return !!data;}
+async function countActiveAdmins(orgId:string){const now=new Date().toISOString();const{data}=await admin.from('user_system_roles').select('user_id,active_from,active_until').eq('organization_id',orgId).eq('role_code','SYSTEM_ADMIN').lte('active_from',now);return (data??[]).filter((r:any)=>!r.active_until||r.active_until>now).length;}
+Deno.serve(async(req)=>{if(req.method==='OPTIONS')return new Response('ok',{headers:cors});if(req.method!=='POST')return json({error:'Metode tidak diizinkan.'},405);try{const u=await currentUser(req),orgId=await adminOrg(u.id),b=await req.json().catch(()=>({})),action=String(b.action??'LIST');
+ if(action==='LIST'){
+  const[{data:profiles,error:pe},{data:roleRows,error:re},{data:catalog,error:ce},{data:pending,error:pge},{data:conflicts,error:cfe}]=await Promise.all([
+   admin.from('profiles').select('user_id,display_name,email,member_type,is_active,created_at,updated_at').eq('organization_id',orgId).order('display_name'),
+   admin.from('user_system_roles').select('id,user_id,role_code,active_from,active_until,granted_by,created_at').eq('organization_id',orgId).order('role_code'),
+   admin.from('system_roles').select('code,name_id,description_id,is_privileged').order('code'),
+   admin.from('pending_system_role_grants').select('id,email,role_code,status,active_from,active_until,created_at,updated_at').eq('organization_id',orgId).order('created_at',{ascending:false}),
+   admin.from('system_role_conflicts').select('role_code_a,role_code_b,reason_id').order('role_code_a')
+  ]);if(pe||re||ce||pge||cfe)throw pe||re||ce||pge||cfe;
+  let authMap=new Map<string,any>();try{const{data}=await admin.auth.admin.listUsers({page:1,perPage:1000});authMap=new Map((data?.users??[]).map((x:any)=>[x.id,{lastSignInAt:x.last_sign_in_at??null}]));}catch(_){ }
+  const roleMap=new Map<string,any[]>();for(const r of roleRows??[]){if(!active(r))continue;const arr=roleMap.get(r.user_id)??[];arr.push({id:r.id,roleCode:r.role_code,activeFrom:r.active_from,activeUntil:r.active_until});roleMap.set(r.user_id,arr);}
+  return json({roles:catalog??[],conflicts:conflicts??[],users:(profiles??[]).map((p:any)=>({...p,roles:roleMap.get(p.user_id)??[],lastSignInAt:authMap.get(p.user_id)?.lastSignInAt??null})),pendingGrants:(pending??[]).filter((x:any)=>x.status==='PENDING')});
+ }
+ if(action==='GRANT_ROLE'){
+  const userId=String(b.userId??''),roleCode=String(b.roleCode??'');if(!userId||!await roleExists(roleCode))return json({error:'User/role tidak valid.'},400);
+  const{data:p}=await admin.from('profiles').select('is_active').eq('user_id',userId).eq('organization_id',orgId).maybeSingle();if(!p)return json({error:'Profile user tidak ditemukan.'},404);if(!p.is_active)return json({error:'Profile nonaktif. Aktifkan profile terlebih dahulu.'},409);
+  const now=new Date().toISOString();const{data:r,error}=await admin.from('user_system_roles').upsert({user_id:userId,organization_id:orgId,role_code:roleCode,active_from:now,active_until:null,granted_by:u.id},{onConflict:'user_id,organization_id,role_code'}).select('id').single();if(error){if((error.message??'').includes('ROLE_CONFLICT'))return json({error:'Role ini konflik dengan role aktif user. Cabut role yang konflik terlebih dahulu.'},409);throw error;}
+  await admin.from('audit_logs').insert({organization_id:orgId,actor_user_id:u.id,event_type:'SYSTEM_ROLE_GRANTED',object_type:'user_system_role',object_id:r.id,details:{target_user_id:userId,role_code:roleCode}});return json({ok:true});
+ }
+ if(action==='REVOKE_ROLE'){
+  const userId=String(b.userId??''),roleCode=String(b.roleCode??'');const now=new Date().toISOString();const{data:r}=await admin.from('user_system_roles').select('id,active_from,active_until').eq('user_id',userId).eq('organization_id',orgId).eq('role_code',roleCode).maybeSingle();if(!r||!active(r))return json({error:'Role aktif tidak ditemukan.'},404);
+  if(roleCode==='SYSTEM_ADMIN'&&await countActiveAdmins(orgId)<=1)return json({error:'SYSTEM_ADMIN terakhir tidak dapat dicabut.'},409);
+  await admin.from('user_system_roles').update({active_until:now}).eq('id',r.id);await admin.from('audit_logs').insert({organization_id:orgId,actor_user_id:u.id,event_type:'SYSTEM_ROLE_REVOKED',object_type:'user_system_role',object_id:r.id,details:{target_user_id:userId,role_code:roleCode}});return json({ok:true});
+ }
+ if(action==='SET_PROFILE_ACTIVE'){
+  const userId=String(b.userId??''),isActive=Boolean(b.isActive);const{data:p}=await admin.from('profiles').select('user_id,is_active').eq('user_id',userId).eq('organization_id',orgId).maybeSingle();if(!p)return json({error:'Profile tidak ditemukan.'},404);
+  if(!isActive){const{data:sa}=await admin.from('user_system_roles').select('id,active_from,active_until').eq('user_id',userId).eq('organization_id',orgId).eq('role_code','SYSTEM_ADMIN').maybeSingle();if(sa&&active(sa)&&await countActiveAdmins(orgId)<=1)return json({error:'Profile SYSTEM_ADMIN terakhir tidak dapat dinonaktifkan.'},409);}
+  const now=new Date().toISOString();await admin.from('profiles').update({is_active:isActive,updated_at:now}).eq('user_id',userId).eq('organization_id',orgId);
+  if(!isActive){const{data:rows}=await admin.from('user_system_roles').select('id,active_from,active_until').eq('user_id',userId).eq('organization_id',orgId);for(const r of rows??[]){if(active(r))await admin.from('user_system_roles').update({active_until:now}).eq('id',r.id);}}
+  await admin.from('audit_logs').insert({organization_id:orgId,actor_user_id:u.id,event_type:isActive?'USER_PROFILE_ACTIVATED':'USER_PROFILE_DEACTIVATED',object_type:'profile',object_id:userId,details:{target_user_id:userId}});return json({ok:true});
+ }
+ if(action==='CREATE_PENDING_GRANT'){
+  const email=String(b.email??'').trim().toLowerCase(),roleCode=String(b.roleCode??''),until=String(b.activeUntil??'').trim()||null;if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!await roleExists(roleCode))return json({error:'Email/role tidak valid.'},400);if(until&&Number.isNaN(Date.parse(until)))return json({error:'Tanggal kedaluwarsa tidak valid.'},400);
+  const{data:existing}=await admin.from('profiles').select('user_id').eq('organization_id',orgId).eq('email',email).maybeSingle();if(existing)return json({error:'User ini sudah memiliki profile. Kelola role dari daftar user.'},409);
+  const[{data:pends},{data:conf}]=await Promise.all([admin.from('pending_system_role_grants').select('role_code').eq('organization_id',orgId).eq('email',email).eq('status','PENDING'),admin.from('system_role_conflicts').select('role_code_a,role_code_b')]);const pendingRoles=(pends??[]).map((x:any)=>x.role_code);const conflict=(conf??[]).find((c:any)=>{const pair=[c.role_code_a,c.role_code_b];return pair.includes(roleCode)&&pair.some((x:string)=>pendingRoles.includes(x)&&x!==roleCode);});if(conflict)return json({error:'Role invitation konflik dengan role invitation aktif lain untuk email ini.'},409);
+  const{data:g,error}=await admin.from('pending_system_role_grants').insert({organization_id:orgId,email,role_code:roleCode,status:'PENDING',active_from:new Date().toISOString(),active_until:until,granted_by:u.id}).select('id').single();if(error){if((error as any).code==='23505')return json({error:'Pending grant untuk email dan role ini sudah ada.'},409);throw error;}
+  await admin.from('audit_logs').insert({organization_id:orgId,actor_user_id:u.id,event_type:'PENDING_SYSTEM_ROLE_GRANT_CREATED',object_type:'pending_system_role_grant',object_id:g.id,details:{email,role_code:roleCode}});return json({ok:true,grantId:g.id});
+ }
+ if(action==='REVOKE_PENDING_GRANT'){
+  const grantId=String(b.grantId??''),now=new Date().toISOString();const{data:g}=await admin.from('pending_system_role_grants').update({status:'REVOKED',revoked_by:u.id,revoked_at:now,updated_at:now}).eq('id',grantId).eq('organization_id',orgId).eq('status','PENDING').select('id,email,role_code').maybeSingle();if(!g)return json({error:'Pending grant tidak ditemukan.'},404);await admin.from('audit_logs').insert({organization_id:orgId,actor_user_id:u.id,event_type:'PENDING_SYSTEM_ROLE_GRANT_REVOKED',object_type:'pending_system_role_grant',object_id:g.id,details:{email:g.email,role_code:g.role_code}});return json({ok:true});
+ }
+ return json({error:'Aksi tidak dikenali.'},400);
+}catch(e){console.error('admin-user-access-action',e);const m=e instanceof Error?e.message:'';if(m==='UNAUTHENTICATED')return json({error:'Silakan masuk terlebih dahulu.'},401);if(m==='FORBIDDEN')return json({error:'Akun ini tidak memiliki kewenangan Administrator Sistem.'},403);return json({error:'Administrasi pengguna belum dapat diproses.'},400);}});
