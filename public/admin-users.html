@@ -8,8 +8,8 @@
   <title>Admin Pengguna & Akses — SAI Cipedak</title>
   <link rel="stylesheet" href="assets/css/app.css" />
   <style>
-    .admin-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}.admin-stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px}.admin-stat span{display:block;color:var(--muted);font-size:12px}.admin-stat strong{display:block;font-size:26px;margin-top:4px}.admin-section{margin-top:22px}.admin-section-head{display:flex;justify-content:space-between;gap:14px;align-items:end;margin-bottom:12px}.admin-section-head h2{margin:0}.admin-user-grid{display:grid;gap:14px}.admin-user-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;display:grid;gap:14px}.admin-user-card.role-conflict{border-color:#f4b4ae;background:#fffafa}.admin-user-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.admin-user-head h3{margin:0 0 3px;font-size:17px}.admin-user-head p{margin:0}.role-list{display:flex;gap:8px;flex-wrap:wrap}.role-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid #cfd9e6;border-radius:999px;padding:6px 9px;background:#f8fbff;font-size:12px;font-weight:700}.role-chip button{padding:0;background:transparent;color:var(--danger);font-size:16px;line-height:1}.user-admin-row{display:grid;grid-template-columns:minmax(180px,1fr) auto;gap:10px;align-items:end}.profile-state{padding:7px 10px;border-radius:999px;font-size:12px;font-weight:750;background:var(--success-soft);color:var(--success)}.profile-state.off{background:#f2f4f7;color:var(--muted)}.conflict-warning{padding:10px 12px;border-radius:10px;background:var(--danger-soft);color:var(--danger);font-size:13px}.pending-list{display:grid;gap:10px}.pending-card{display:flex;justify-content:space-between;gap:14px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:13px 14px;background:#fff}.pending-card p{margin:2px 0}.activation-link{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;word-break:break-all}.search-box{max-width:320px}.grant-grid{display:grid;grid-template-columns:1.3fr 1fr .8fr auto;gap:10px;align-items:end}.muted-small{color:var(--muted);font-size:12px}.danger-button{background:var(--danger-soft);color:var(--danger)}
-    @media(max-width:760px){.admin-stats{grid-template-columns:1fr}.admin-section-head,.admin-user-head,.pending-card{align-items:stretch;flex-direction:column}.grant-grid,.user-admin-row{grid-template-columns:1fr}.search-box{max-width:none}}
+    .admin-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}.admin-stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px}.admin-stat span{display:block;color:var(--muted);font-size:12px}.admin-stat strong{display:block;font-size:26px;margin-top:4px}.admin-section{margin-top:22px}.admin-section-head{display:flex;justify-content:space-between;gap:14px;align-items:end;margin-bottom:12px}.admin-section-head h2{margin:0}.admin-user-grid{display:grid;gap:14px}.admin-user-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;display:grid;gap:14px}.admin-user-card.role-conflict{border-color:#f4b4ae;background:#fffafa}.admin-user-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.admin-user-head h3{margin:0 0 3px;font-size:17px}.admin-user-head p{margin:0}.role-list{display:flex;gap:8px;flex-wrap:wrap}.role-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid #cfd9e6;border-radius:999px;padding:6px 9px;background:#f8fbff;font-size:12px;font-weight:700}.role-chip button{padding:0;background:transparent;color:var(--danger);font-size:16px;line-height:1}.user-admin-row{display:grid;grid-template-columns:minmax(180px,1fr) auto;gap:10px;align-items:end}.profile-state{padding:7px 10px;border-radius:999px;font-size:12px;font-weight:750;background:var(--success-soft);color:var(--success)}.profile-state.off{background:#f2f4f7;color:var(--muted)}.conflict-warning{padding:10px 12px;border-radius:10px;background:var(--danger-soft);color:var(--danger);font-size:13px}.pending-list{display:grid;gap:10px}.pending-card{display:flex;justify-content:space-between;gap:14px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:13px 14px;background:#fff}.pending-card p{margin:2px 0}.activation-link{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;word-break:break-all}.search-box{max-width:320px}.grant-grid{display:grid;grid-template-columns:1.3fr 1fr .8fr auto;gap:10px;align-items:end}.reporter-grid{display:grid;grid-template-columns:1.3fr .7fr 1.4fr auto;gap:10px;align-items:end}.muted-small{color:var(--muted);font-size:12px}.danger-button{background:var(--danger-soft);color:var(--danger)}
+    @media(max-width:760px){.admin-stats{grid-template-columns:1fr}.admin-section-head,.admin-user-head,.pending-card{align-items:stretch;flex-direction:column}.grant-grid,.reporter-grid,.user-admin-row{grid-template-columns:1fr}.search-box{max-width:none}}
   </style>
   <script src="assets/js/config.js"></script>
 </head>
@@ -29,16 +29,28 @@
       <div class="action-row"><a class="button secondary" href="access.html">Halaman Aktivasi</a><button id="refreshButton" class="secondary" type="button">Segarkan</button><button id="logoutButton" class="text-button" type="button">Keluar</button></div>
     </div>
     <div id="pageMessage" class="form-message internal-message" hidden></div>
-    <div class="notice"><strong>Boundary:</strong> role <strong>SYSTEM_ADMIN</strong> mengelola akses teknis dan tidak otomatis memberi akses isi kasus. Role <strong>DEKOM</strong> tidak boleh aktif bersamaan dengan <strong>TRIAGE</strong> atau <strong>SECRETARIAT</strong>. Semua perubahan dicatat di audit trail.</div>
+    <div class="notice"><strong>Boundary:</strong> internal system role dan hak memakai jalur laporan beridentitas adalah dua hal berbeda. <strong>SYSTEM_ADMIN</strong> tidak otomatis mendapat akses isi kasus. <strong>DEKOM</strong> tidak boleh aktif bersamaan dengan <strong>TRIAGE</strong> atau <strong>SECRETARIAT</strong>. Semua perubahan dicatat di audit trail.</div>
 
     <section class="admin-stats" aria-label="Ringkasan pengguna">
       <div class="admin-stat"><span>Pengguna aktif</span><strong id="countActive">0</strong></div>
       <div class="admin-stat"><span>Pengguna nonaktif</span><strong id="countInactive">0</strong></div>
-      <div class="admin-stat"><span>Pending akses</span><strong id="countPending">0</strong></div>
+      <div class="admin-stat"><span>Pending akses internal</span><strong id="countPending">0</strong></div>
+      <div class="admin-stat"><span>Reporter eligible</span><strong id="countReporters">0</strong></div>
     </section>
 
     <section class="admin-section form-card">
-      <div><p class="eyebrow">Onboarding</p><h2>Siapkan akses user baru</h2><p class="muted">Email belum perlu memiliki profile. Setelah grant dibuat, user membuka halaman Aktivasi dan login Google dengan email yang sama.</p></div>
+      <div><p class="eyebrow">Reporter eligibility</p><h2>Jalur laporan dengan identitas</h2><p class="muted">Daftar ini hanya menentukan siapa yang boleh menggunakan jalur laporan beridentitas sebagai OTS/Staff. Ini tidak memberi akses internal terhadap kasus.</p></div>
+      <form id="reporterForm" class="reporter-grid">
+        <label>Email Google<input id="reporterEmail" type="email" autocomplete="email" placeholder="nama@gmail.com" required /></label>
+        <label>Tipe anggota<select id="reporterType"><option value="OTS">OTS</option><option value="STAFF">Staff</option></select></label>
+        <label>Catatan <span class="optional">(opsional)</span><input id="reporterNotes" maxlength="2000" placeholder="Kelas/unit atau konteks verifikasi" /></label>
+        <button class="primary" type="submit">Simpan eligibility</button>
+      </form>
+      <div id="reporterList" class="pending-list"></div>
+    </section>
+
+    <section class="admin-section form-card">
+      <div><p class="eyebrow">Onboarding internal</p><h2>Siapkan akses user baru</h2><p class="muted">Email belum perlu memiliki profile. Setelah grant dibuat, user membuka halaman Aktivasi dan login Google dengan email yang sama.</p></div>
       <form id="grantForm" class="grant-grid">
         <label>Email Google<input id="grantEmail" type="email" autocomplete="email" placeholder="nama@gmail.com" required /></label>
         <label>Role<select id="grantRole" required></select></label>
@@ -56,6 +68,6 @@
   </section>
 </main>
 <footer class="container">SAI Cipedak · Portal Pelaporan</footer>
-<script type="module" src="assets/js/admin-users.js?v=20260826-1"></script>
+<script type="module" src="assets/js/admin-users.js?v=20260827-1"></script>
 </body>
 </html>
