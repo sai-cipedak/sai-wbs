@@ -15,6 +15,12 @@ verify_jwt = false
 [functions.send-anonymous-message]
 verify_jwt = false
 
+[functions.my-identified-reports]
+verify_jwt = true
+
+[functions.send-identified-message]
+verify_jwt = true
+
 [functions.triage-case-action]
 verify_jwt = true
 
