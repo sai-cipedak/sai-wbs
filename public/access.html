@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <meta name="description" content="Aktivasi akses internal Portal Pelaporan SAI Cipedak." />
+  <title>Aktivasi Akses Internal — SAI Cipedak</title>
+  <link rel="stylesheet" href="assets/css/app.css" />
+  <script src="assets/js/config.js"></script>
+</head>
+<body>
+<header><div class="container header-inner"><a class="brand" href="index.html">SAI Cipedak</a><div class="pill">Aktivasi Akses</div></div></header>
+<main class="container narrow">
+  <a class="back-link" href="index.html">← Kembali ke portal</a>
+  <section id="loginPanel" class="form-card" hidden>
+    <p class="eyebrow">Internal access</p>
+    <h1 class="internal-title">Aktivasi Akses Internal</h1>
+    <p>Gunakan akun Google dengan email yang sudah didaftarkan oleh Administrator Sistem.</p>
+    <button id="googleLogin" class="primary" type="button">Masuk dengan Google</button>
+    <div id="loginMessage" class="form-message" hidden></div>
+  </section>
+  <section id="resultPanel" class="form-card" hidden>
+    <div class="status-head"><div><p class="eyebrow">Internal access</p><h1 class="internal-title">Aktivasi Akses Internal</h1></div><span id="resultBadge" class="status-badge">Memproses</span></div>
+    <p id="accountLabel" class="muted"></p>
+    <div id="resultMessage" class="form-message info"></div>
+    <div id="roleList" class="summary-list"></div>
+    <div id="workspaceLinks" class="action-row"></div>
+    <button id="logoutButton" class="text-button" type="button">Keluar / ganti akun</button>
+  </section>
+</main>
+<footer class="container narrow">SAI Cipedak · Portal Pelaporan</footer>
+<script type="module" src="assets/js/access.js?v=20260826-1"></script>
+</body>
+</html>
