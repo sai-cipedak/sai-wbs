@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <meta name="description" content="Workspace Otoritas Perlindungan untuk penanganan safeguarding SAI Cipedak." />
+  <title>Safeguarding — SAI Cipedak</title>
+  <link rel="stylesheet" href="assets/css/app.css" />
+  <style>
+    .hse-alert{border:1px solid #efb2ad;background:#fff7f6;border-radius:14px;padding:14px 16px}.hse-alert strong{color:var(--danger)}
+    .hse-ok{border:1px solid #b8d8c3;background:#f6fbf7;border-radius:14px;padding:14px 16px}.team-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.team-card{border:1px solid var(--line);border-radius:14px;padding:14px;background:#fff;display:grid;gap:9px}.team-card-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.team-card h4{margin:0}.team-card p{margin:0}.protective-list{display:grid;gap:10px}.protective-card{border:1px solid var(--line);border-radius:12px;padding:13px;background:#fff}.protective-card p{margin:4px 0}.hse-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.hse-form-grid .wide{grid-column:1/-1}
+    @media(max-width:760px){.team-grid,.hse-form-grid{grid-template-columns:1fr}.hse-form-grid .wide{grid-column:auto}.team-card-head{flex-direction:column}}
+  </style>
+  <script src="assets/js/config.js"></script>
+</head>
+<body>
+<header><div class="container header-inner"><a class="brand" href="index.html">SAI Cipedak</a><div class="pill">Otoritas Perlindungan</div></div></header>
+<main class="container">
+  <section id="loginPanel" class="form-card compact-form" hidden>
+    <h1 class="internal-title">Safeguarding Fast Lane</h1>
+    <p>Masuk menggunakan akun Google yang memiliki role Otoritas Perlindungan.</p>
+    <button id="googleLogin" class="primary" type="button">Masuk dengan Google</button>
+    <div id="loginMessage" class="form-message" hidden></div>
+  </section>
+
+  <section id="workspacePanel" hidden>
+    <div class="internal-toolbar">
+      <div><p class="eyebrow">Safeguarding</p><h1 class="internal-title">Workspace Otoritas Perlindungan</h1><p class="muted" id="userLabel"></p></div>
+      <div class="action-row"><button id="refreshButton" class="secondary" type="button">Segarkan</button><button id="logoutButton" class="text-button" type="button">Keluar</button></div>
+    </div>
+    <div class="notice"><strong>Fast lane:</strong> bila ada immediate danger, protective action harus dimulai pada hari yang sama dan dicatat sebelum case dapat masuk pembentukan Tim Pemeriksa.</div>
+    <div id="pageMessage" class="form-message internal-message" hidden></div>
+    <div class="internal-layout">
+      <aside class="case-list-panel"><p class="eyebrow">Case Safeguarding</p><div id="caseList" class="case-list"></div></aside>
+      <section id="caseDetail" class="case-detail-panel"><p class="empty-state">Pilih case untuk melihat detail.</p></section>
+    </div>
+  </section>
+</main>
+<footer class="container">SAI Cipedak · Portal Pelaporan</footer>
+<script type="module" src="assets/js/hse.js?v=20260827-1"></script>
+</body>
+</html>
