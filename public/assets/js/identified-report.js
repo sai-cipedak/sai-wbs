@@ -7,6 +7,28 @@ const form = document.querySelector('#identifiedReportForm');
 const identityLabel = document.querySelector('#identityLabel');
 const message = document.querySelector('#formMessage');
 const result = document.querySelector('#successResult');
+const ATTEMPT_KEY = 'sai-wbs:identified-report-attempt:v1';
+let inFlight = false;
+let memoryAttempt = null;
+
+function attemptFor(payload) {
+  const fingerprint = JSON.stringify(payload);
+  let stored = memoryAttempt;
+  try {
+    const raw = sessionStorage.getItem(ATTEMPT_KEY);
+    if (raw) stored = JSON.parse(raw);
+  } catch (_) { /* use memory fallback */ }
+  if (stored?.fingerprint === fingerprint && typeof stored?.token === 'string') return stored.token;
+  const next = { fingerprint, token: crypto.randomUUID() };
+  memoryAttempt = next;
+  try { sessionStorage.setItem(ATTEMPT_KEY, JSON.stringify(next)); } catch (_) { /* memory fallback */ }
+  return next.token;
+}
+
+function clearAttempt() {
+  memoryAttempt = null;
+  try { sessionStorage.removeItem(ATTEMPT_KEY); } catch (_) { /* no-op */ }
+}
 
 async function refreshSession() {
   const { data: { session } } = await supabaseClient.auth.getSession();
@@ -33,11 +55,15 @@ document.querySelector('#logoutButton')?.addEventListener('click', async () => {
 
 form?.addEventListener('submit', async (event) => {
   event.preventDefault();
+  if (inFlight) return;
   const button = form.querySelector('button[type="submit"]');
-  setBusy(button, true);
+  const payload = getIntakePayload(form);
+  payload.submissionToken = attemptFor(payload);
+  inFlight = true;
+  setBusy(button, true, 'Mengirim laporan…');
   message.hidden = true;
   try {
-    const { data, error } = await supabaseClient.functions.invoke('submit-identified-report', { body: getIntakePayload(form) });
+    const { data, error } = await supabaseClient.functions.invoke('submit-identified-report', { body: payload });
     if (error) {
       let detail = error.message;
       try { const context = await error.context?.json(); if (context?.error) detail = context.error; } catch (_) { /* keep default */ }
@@ -48,7 +74,11 @@ form?.addEventListener('submit', async (event) => {
     formPanel.hidden = true;
     result.hidden = false;
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    clearAttempt();
   } catch (error) {
     showMessage(message, error instanceof Error ? error.message : 'Laporan belum dapat dikirim.', 'error');
-  } finally { setBusy(button, false); }
+  } finally {
+    inFlight = false;
+    setBusy(button, false);
+  }
 });
