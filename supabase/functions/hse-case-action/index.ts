@@ -67,14 +67,14 @@ Deno.serve(async(req:Request)=>{
 
     if(action==='DETAIL'){
       const q=await Promise.all([
-        admin.from('case_reports').select('case_id,title,narrative,incident_date,incident_time_text,location_text,people_involved_text,child_safety_risk,ongoing_risk,created_at').eq('case_id',caseId).single(),
+        admin.from('case_reports').select('case_id,title,narrative,incident_date,incident_time_text,location_text,people_involved_text,child_safety_risk,ongoing_risk').eq('case_id',caseId).single(),
         admin.from('case_messages').select('id,sender_type,body,visible_to_reporter,created_at').eq('case_id',caseId).eq('visible_to_reporter',true).order('created_at'),
         admin.from('case_safeguarding_assessments').select('id,immediate_danger,risk_summary,assessed_by,assessed_at').eq('case_id',caseId).order('assessed_at',{ascending:false}),
         admin.from('case_protective_actions').select('id,assessment_id,action_text,owner_text,initiated_at,status,completion_note,completed_at').eq('case_id',caseId).order('initiated_at'),
         admin.from('case_team_members').select('id,email,display_name,member_category,committee_role,nomination_status,linked_user_id,nominated_at,declaration_at').eq('case_id',caseId).neq('nomination_status','REVOKED').order('nominated_at'),
         admin.from('case_assignments').select('user_id,assignment_role,access_status').eq('case_id',caseId),
       ]);
-      if(q[0].error)throw q[0].error;
+      for(const result of q){if(result.error)throw result.error;}
       const assignments=q[5].data??[];const amap=new Map(assignments.map((a:any)=>[`${a.user_id}|${a.assignment_role}`,a.access_status]));
       return json({case:c,report:q[0].data,messages:q[1].data??[],assessments:q[2].data??[],protectiveActions:q[3].data??[],team:(q[4].data??[]).map((m:any)=>({...m,assignment_status:m.linked_user_id?(amap.get(`${m.linked_user_id}|${m.committee_role}`)??null):null}))});
     }
