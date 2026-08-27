@@ -45,6 +45,9 @@ verify_jwt = true
 [functions.dekom-followup-action]
 verify_jwt = true
 
+[functions.hse-case-action]
+verify_jwt = true
+
 [functions.admin-user-access-action]
 verify_jwt = true
 
