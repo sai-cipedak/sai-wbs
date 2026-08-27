@@ -42,7 +42,9 @@ async function loadCases() {
   showMessage('');
   const { data, error } = await supabaseClient.from('cases')
     .select('id, public_case_id, reporting_mode, status, classification, authority_code, submitted_at')
-    .eq('authority_code', 'TRIAGE').order('submitted_at', { ascending: false });
+    .eq('authority_code', 'TRIAGE')
+    .eq('is_test_data', false)
+    .order('submitted_at', { ascending: false });
   if (error) { showMessage('Antrean laporan belum dapat dimuat.', 'error'); return; }
   currentCases = data ?? [];
   renderCaseList();
