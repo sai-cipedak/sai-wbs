@@ -130,9 +130,21 @@ async function upload(caseId, section, listData) {
     action: 'INIT_UPLOAD', caseId, originalFilename: file.name, mimeType: file.type,
     fileSizeBytes: file.size, sha256Hash: hash, accessScope: scope,
   });
-  const uploaded = await fetch(init.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-  if (!uploaded.ok) throw new Error('Upload ke repositori privat gagal. Coba kembali.');
-  await invoke({ action: 'COMPLETE_UPLOAD', caseId, sessionId: init.sessionId, description });
+  let uploadResponseReadable = false;
+  try {
+    const uploaded = await fetch(init.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+    uploadResponseReadable = uploaded.ok;
+    if (!uploaded.ok) throw new Error('Upload ke repositori privat gagal. Coba kembali.');
+  } catch (_) {
+    // Google can accept the cross-origin upload while withholding the response from browser JavaScript.
+    // COMPLETE_UPLOAD performs authoritative metadata and SHA-256 verification before registration.
+  }
+  try {
+    await invoke({ action: 'COMPLETE_UPLOAD', caseId, sessionId: init.sessionId, description });
+  } catch (error) {
+    if (!uploadResponseReadable) throw new Error('Upload belum dapat diverifikasi oleh server. Muat ulang daftar sebelum mencoba kembali.');
+    throw error;
+  }
   message(section, 'Bukti tersimpan privat dan upload dicatat di audit trail.', 'success');
   fileInput.value = '';
   section.querySelector('.evidence-description').value = '';
