@@ -51,6 +51,9 @@ verify_jwt = true
 [functions.hse-authority-action]
 verify_jwt = true
 
+[functions.hse-followup-action]
+verify_jwt = true
+
 [functions.admin-user-access-action]
 verify_jwt = true
 
