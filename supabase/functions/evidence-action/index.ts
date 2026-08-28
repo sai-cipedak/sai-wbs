@@ -8,6 +8,7 @@ import {
   getDriveFileContent,
   getDriveFileMetadata,
   startResumableDriveUpload,
+  trashDriveFile,
 } from '../_shared/evidence-drive.ts';
 
 const admin = createClient(
@@ -450,6 +451,38 @@ Deno.serve(async (req) => {
       return json({ ok: true, evidenceId, status: 'QUARANTINED' });
     }
 
+    if (action === 'REMOVE') {
+      if (access.actorContext !== 'INTERNAL' || access.internalKind !== 'AUTHORITY') return json({ error: 'Hanya otoritas case yang dapat menghapus bukti.' }, 403);
+      const evidenceId = String(body.evidenceId ?? '').trim();
+      const note = String(body.removalNote ?? '').trim().slice(0, 2000);
+      if (!evidenceId || note.length < 5) return json({ error: 'Alasan penghapusan wajib diisi.' }, 400);
+      const { data: ev, error } = await admin.from('case_evidence').select('id,drive_file_id,status,mime_type,file_size_bytes').eq('id', evidenceId).eq('case_id', access.caseRow.id).maybeSingle();
+      if (error || !ev) return json({ error: 'Bukti tidak ditemukan.' }, 404);
+      if (ev.status === 'REMOVED') return json({ ok: true, evidenceId, status: 'REMOVED', alreadyRemoved: true });
+      if (!driveConfigured()) return json({ error: 'Repositori Google Drive belum dikonfigurasi untuk portal.' }, 503);
+      await trashDriveFile(ev.drive_file_id);
+      const now = new Date().toISOString();
+      const { error: updateError } = await admin.from('case_evidence').update({
+        status: 'REMOVED',
+        access_scope: 'AUTHORITY_ONLY',
+        review_state: 'RESTRICTED',
+        reviewed_by_user_id: access.userId,
+        reviewed_at: now,
+        review_note: note,
+      }).eq('id', evidenceId).eq('case_id', access.caseRow.id);
+      if (updateError) throw updateError;
+      await admin.from('audit_logs').insert({
+        organization_id: access.caseRow.organization_id,
+        case_id: access.caseRow.id,
+        actor_user_id: access.userId,
+        event_type: 'EVIDENCE_REMOVED',
+        object_type: 'case_evidence',
+        object_id: evidenceId,
+        details: { removal_mode: 'DRIVE_TRASH', mime_type: ev.mime_type, file_size_bytes: ev.file_size_bytes, reason: note },
+      });
+      return json({ ok: true, evidenceId, status: 'REMOVED' });
+    }
+
     if (action === 'DOWNLOAD') {
       const evidenceId = String(body.evidenceId ?? '').trim();
       if (!evidenceId) return json({ error: 'Bukti wajib dipilih.' }, 400);
@@ -463,6 +496,15 @@ Deno.serve(async (req) => {
       if (fileResponse.headers.get('Content-Length')) headers.set('Content-Length', fileResponse.headers.get('Content-Length')!);
       headers.set('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(ev.original_filename)}`);
       headers.set('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length');
+      await admin.from('audit_logs').insert({
+        organization_id: access.caseRow.organization_id,
+        case_id: access.caseRow.id,
+        actor_user_id: access.userId,
+        event_type: 'EVIDENCE_ACCESSED',
+        object_type: 'case_evidence',
+        object_id: evidenceId,
+        details: { actor_context: access.actorContext, internal_kind: access.internalKind, mime_type: ev.mime_type, file_size_bytes: ev.file_size_bytes },
+      });
       return new Response(fileResponse.body, { status: 200, headers });
     }
 
