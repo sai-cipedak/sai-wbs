@@ -46,7 +46,7 @@ async function authorize() {
   copy.textContent = 'Pelapor: Identitas Dirahasiakan · Case synthetic UAT';
   head.append(title, copy);
   caseDetail.replaceChildren(head);
-  await import('./evidence-workspace.js?v=20260828-2');
+  await import('./evidence-workspace.js?v=20260828-3');
 }
 
 document.querySelector('#googleLogin')?.addEventListener('click', async () => {
