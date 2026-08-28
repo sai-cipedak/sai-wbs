@@ -205,6 +205,78 @@ async function canDownload(access: Access, evidence: any) {
   return access.internalKind === 'ASSIGNEE' && evidence.access_scope === 'INVESTIGATION_TEAM' && evidence.review_state === 'CLEARED';
 }
 
+async function recoverCompletedUploads(access: Access, policy: typeof DEFAULT_POLICY) {
+  let query = admin.from('case_evidence_upload_sessions')
+    .select('*')
+    .eq('case_id', access.caseRow.id)
+    .eq('status', 'INITIATED')
+    .eq('uploader_context', access.uploaderContext)
+    .gt('expires_at', new Date().toISOString())
+    .limit(10);
+  if (access.userId) query = query.eq('uploaded_by_user_id', access.userId);
+  else query = query.is('uploaded_by_user_id', null);
+  const { data: sessions } = await query;
+  const hashMax = Number(policy.sha256_client_max_bytes ?? DEFAULT_POLICY.sha256_client_max_bytes);
+
+  for (const session of sessions ?? []) {
+    try {
+      const meta = await getDriveFileMetadata(session.drive_file_id);
+      const validMeta = meta.id === session.drive_file_id && !meta.trashed && meta.name === session.storage_filename && meta.mimeType === session.mime_type && Number(meta.size ?? -1) === Number(session.file_size_bytes) && Array.isArray(meta.parents) && meta.parents.includes(session.drive_folder_id) && meta.appProperties?.sai_evidence_session === session.id;
+      if (!validMeta) continue;
+
+      let verifiedHash: string | null = null;
+      if (Number(session.file_size_bytes) <= hashMax) {
+        const fileResponse = await getDriveFileContent(session.drive_file_id);
+        const digest = await crypto.subtle.digest('SHA-256', await fileResponse.arrayBuffer());
+        verifiedHash = hex(new Uint8Array(digest));
+        if (!session.sha256_hash || verifiedHash !== String(session.sha256_hash).toLowerCase()) {
+          await admin.from('case_evidence_upload_sessions').update({ status: 'FAILED', updated_at: new Date().toISOString() }).eq('id', session.id);
+          continue;
+        }
+      }
+
+      const reviewedBy = session.review_state === 'CLEARED' ? access.userId : null;
+      const reviewedAt = session.review_state === 'CLEARED' ? new Date().toISOString() : null;
+      const { data: evidence, error: evidenceError } = await admin.from('case_evidence').insert({
+        case_id: access.caseRow.id,
+        drive_file_id: session.drive_file_id,
+        drive_folder_id: session.drive_folder_id,
+        storage_filename: session.storage_filename,
+        original_filename: session.original_filename,
+        mime_type: session.mime_type,
+        file_size_bytes: session.file_size_bytes,
+        sha256_hash: verifiedHash,
+        evidence_type: evidenceType(session.mime_type),
+        description: 'Recovered after verified browser upload.',
+        uploader_context: session.uploader_context,
+        uploaded_by_user_id: session.uploaded_by_user_id,
+        status: 'ACTIVE',
+        access_scope: session.access_scope,
+        review_state: session.review_state,
+        reviewed_by_user_id: reviewedBy,
+        reviewed_at: reviewedAt,
+        last_verified_at: new Date().toISOString(),
+      }).select('id').single();
+      if (evidenceError && evidenceError.code !== '23505') throw evidenceError;
+      const evidenceId = evidence?.id ?? (await admin.from('case_evidence').select('id').eq('drive_file_id', session.drive_file_id).single()).data?.id;
+      await admin.from('case_evidence_upload_sessions').update({ status: 'FINALIZED', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', session.id);
+      if (evidence?.id) {
+        await admin.from('audit_logs').insert({
+          organization_id: access.caseRow.organization_id,
+          case_id: access.caseRow.id,
+          actor_user_id: access.userId,
+          event_type: 'EVIDENCE_REGISTERED',
+          object_type: 'case_evidence',
+          object_id: evidenceId,
+          details: { uploader_context: session.uploader_context, access_scope: session.access_scope, review_state: session.review_state, mime_type: session.mime_type, file_size_bytes: session.file_size_bytes, sha256_verified: Boolean(verifiedHash), recovered_after_browser_cors: true },
+        });
+      }
+    } catch (error) {
+      console.error('Evidence upload recovery failed', session.id, error);
+    }
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Metode tidak diizinkan.' }, 405);
@@ -241,6 +313,7 @@ Deno.serve(async (req) => {
     const policy = await policyFor(access.caseRow.organization_id);
 
     if (action === 'LIST') {
+      await recoverCompletedUploads(access, policy);
       let q = admin.from('case_evidence')
         .select('id,original_filename,mime_type,file_size_bytes,sha256_hash,evidence_type,description,uploader_context,status,access_scope,review_state,review_note,created_at,reviewed_at,uploaded_by_user_id')
         .eq('case_id', access.caseRow.id)
