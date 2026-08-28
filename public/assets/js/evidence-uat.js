@@ -64,4 +64,7 @@ document.querySelector('#logoutButton')?.addEventListener('click', async () => {
 });
 
 await authorize();
-supabaseClient.auth.onAuthStateChange(() => authorize());
+supabaseClient.auth.onAuthStateChange((event) => {
+  if (event === 'SIGNED_OUT') location.reload();
+  else if (event === 'SIGNED_IN' && workspacePanel.hidden) authorize();
+});
