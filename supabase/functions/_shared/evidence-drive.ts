@@ -1,77 +1,38 @@
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
 
-function b64url(input: Uint8Array | string) {
-  const bytes = typeof input === 'string' ? new TextEncoder().encode(input) : input;
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-}
-
-function pemBytes(pemValue: string) {
-  const normalized = pemValue.replace(/\\n/g, '\n').trim();
-  const body = normalized
-    .replace(/-----BEGIN PRIVATE KEY-----/g, '')
-    .replace(/-----END PRIVATE KEY-----/g, '')
-    .replace(/\s+/g, '');
-  if (!body) throw new Error('DRIVE_NOT_CONFIGURED');
-  const binary = atob(body);
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
-}
-
 export function driveConfigured() {
   return Boolean(
-    Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL') &&
-    Deno.env.get('GOOGLE_PRIVATE_KEY') &&
+    Deno.env.get('GOOGLE_OAUTH_CLIENT_ID') &&
+    Deno.env.get('GOOGLE_OAUTH_CLIENT_SECRET') &&
+    Deno.env.get('GOOGLE_OAUTH_REFRESH_TOKEN') &&
     Deno.env.get('GOOGLE_DRIVE_ROOT_FOLDER_ID')
   );
 }
 
-async function serviceAccountToken() {
+async function driveAccessToken() {
   if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) return cachedToken.value;
 
-  const email = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL') ?? '';
-  const privateKey = Deno.env.get('GOOGLE_PRIVATE_KEY') ?? '';
-  if (!email || !privateKey) throw new Error('DRIVE_NOT_CONFIGURED');
-
-  const now = Math.floor(Date.now() / 1000);
-  const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const claim = b64url(JSON.stringify({
-    iss: email,
-    scope: DRIVE_SCOPE,
-    aud: TOKEN_URL,
-    iat: now,
-    exp: now + 3600,
-  }));
-  const unsigned = `${header}.${claim}`;
-  const key = await crypto.subtle.importKey(
-    'pkcs8',
-    pemBytes(privateKey),
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const sig = new Uint8Array(await crypto.subtle.sign(
-    'RSASSA-PKCS1-v1_5',
-    key,
-    new TextEncoder().encode(unsigned),
-  ));
-  const assertion = `${unsigned}.${b64url(sig)}`;
+  const clientId = Deno.env.get('GOOGLE_OAUTH_CLIENT_ID') ?? '';
+  const clientSecret = Deno.env.get('GOOGLE_OAUTH_CLIENT_SECRET') ?? '';
+  const refreshToken = Deno.env.get('GOOGLE_OAUTH_REFRESH_TOKEN') ?? '';
+  if (!clientId || !clientSecret || !refreshToken) throw new Error('DRIVE_NOT_CONFIGURED');
 
   const response = await fetch(TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion,
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
     }),
   });
   if (!response.ok) {
-    console.error('Google token exchange failed', response.status, await response.text());
+    console.error('Google OAuth refresh failed', response.status, (await response.text()).slice(0, 1000));
     throw new Error('DRIVE_AUTH_FAILED');
   }
   const data = await response.json() as { access_token?: string; expires_in?: number };
@@ -84,7 +45,7 @@ async function serviceAccountToken() {
 }
 
 async function authorizedFetch(url: string, init: RequestInit = {}, retry = true) {
-  const token = await serviceAccountToken();
+  const token = await driveAccessToken();
   const headers = new Headers(init.headers ?? {});
   headers.set('Authorization', `Bearer ${token}`);
   const response = await fetch(url, { ...init, headers });
@@ -103,6 +64,22 @@ async function driveJson(url: string, init: RequestInit = {}) {
     throw new Error(`DRIVE_HTTP_${response.status}`);
   }
   return response.status === 204 ? null : await response.json();
+}
+
+export async function verifyDriveRepository() {
+  if (!driveConfigured()) return { ready: false, privateAccessEnforced: false };
+  const rootId = Deno.env.get('GOOGLE_DRIVE_ROOT_FOLDER_ID') ?? '';
+  const file = await driveJson(
+    `${DRIVE_API}/files/${encodeURIComponent(rootId)}?supportsAllDrives=true&fields=id,mimeType,trashed,capabilities(canAddChildren)`,
+  ) as { id?: string; mimeType?: string; trashed?: boolean; capabilities?: { canAddChildren?: boolean } };
+  const permissions = await driveJson(
+    `${DRIVE_API}/files/${encodeURIComponent(rootId)}/permissions?supportsAllDrives=true&fields=permissions(type,role,allowFileDiscovery)`,
+  ) as { permissions?: Array<{ type?: string; role?: string; allowFileDiscovery?: boolean }> };
+  const broadPermission = (permissions.permissions ?? []).some((item) => item.type === 'anyone' || item.type === 'domain');
+  return {
+    ready: file.id === rootId && file.mimeType === 'application/vnd.google-apps.folder' && !file.trashed && file.capabilities?.canAddChildren !== false,
+    privateAccessEnforced: !broadPermission,
+  };
 }
 
 export async function ensureCaseEvidenceFolder(
