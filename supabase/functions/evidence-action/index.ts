@@ -9,6 +9,7 @@ import {
   getDriveFileMetadata,
   startResumableDriveUpload,
   trashDriveFile,
+  verifyDriveRepository,
 } from '../_shared/evidence-drive.ts';
 
 const admin = createClient(
@@ -216,6 +217,11 @@ Deno.serve(async (req) => {
       const { data: org } = await admin.from('organizations').select('id').eq('code', 'SAI-CIPEDAK').single();
       if (!org) throw new Error('ORG_NOT_FOUND');
       const policy = await policyFor(org.id);
+      let repository = { ready: false, privateAccessEnforced: false };
+      if (driveConfigured()) {
+        try { repository = await verifyDriveRepository(); }
+        catch (error) { console.error('Drive repository verification failed', error); }
+      }
       return json({
         policy: {
           provider: policy.provider,
@@ -226,6 +232,8 @@ Deno.serve(async (req) => {
           publicLinksAllowed: policy.public_links_allowed,
         },
         uploadConfigured: driveConfigured(),
+        repositoryReady: repository.ready,
+        privateAccessEnforced: repository.privateAccessEnforced,
       });
     }
 
