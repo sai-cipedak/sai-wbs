@@ -52,7 +52,7 @@ function renderCaseList() {
   caseList.replaceChildren();
   if (!cases.length) return caseList.append(el('p', 'Tidak ada assignment aktif.', 'empty-state'));
   for (const c of cases) {
-    const b = el('button', null, `case-list-button${c.id === selectedCaseId ? ' active' : ''}`); b.type = 'button';
+    const b = el('button', null, `case-list-button${c.id === selectedCaseId ? ' active' : ''}`); b.type = 'button'; b.dataset.caseId = c.id;
     b.append(el('strong', c.public_case_id), el('span', c.title), el('span', `${ROLE[c.assignmentRole] ?? c.assignmentRole} · ${STATUS[c.status] ?? c.status}`));
     b.addEventListener('click', () => loadDetail(c.id)); caseList.append(b);
   }
