@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>UAT Evidence Management — SAI Cipedak</title>
+  <link rel="stylesheet" href="assets/css/app.css" />
+  <link rel="stylesheet" href="assets/css/evidence.css?v=20260828-1" />
+  <script src="assets/js/config.js"></script>
+</head>
+<body>
+<header><div class="container header-inner"><a class="brand" href="index.html">SAI Cipedak</a><div class="pill">MODE UAT · Evidence</div></div></header>
+<main class="container">
+  <section id="loginPanel" class="form-card compact-form" hidden>
+    <h1 class="internal-title">UAT Evidence Management</h1>
+    <p>Masuk dengan akun internal yang memiliki kewenangan pada case UAT ini.</p>
+    <button id="googleLogin" class="primary" type="button">Masuk dengan Google</button>
+    <div id="loginMessage" class="form-message" hidden></div>
+  </section>
+  <section id="workspacePanel" hidden>
+    <div class="internal-toolbar">
+      <div><p class="eyebrow">MODE UAT</p><h1 class="internal-title">Evidence Management</h1><p class="muted" id="userLabel"></p></div>
+      <div class="action-row"><button id="logoutButton" class="text-button" type="button">Keluar</button></div>
+    </div>
+    <div class="notice"><strong>Isolasi aktif:</strong> halaman ini hanya menunjuk case berlabel UAT. Backend tetap memeriksa role dan case-scoped access pada setiap aksi.</div>
+    <div class="internal-layout">
+      <aside class="case-list-panel"><p class="eyebrow">Case UAT</p><div id="caseList" class="case-list"></div></aside>
+      <section id="caseDetail" class="case-detail-panel"><p class="empty-state">Memuat case UAT...</p></section>
+    </div>
+  </section>
+</main>
+<footer class="container">SAI Cipedak · Portal Pelaporan</footer>
+<script type="module" src="assets/js/evidence-uat.js?v=20260828-1"></script>
+</body>
+</html>
