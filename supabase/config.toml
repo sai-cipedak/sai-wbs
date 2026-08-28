@@ -60,6 +60,9 @@ verify_jwt = true
 [functions.grievance-followup-action]
 verify_jwt = true
 
+[functions.evidence-action]
+verify_jwt = false
+
 [functions.admin-user-access-action]
 verify_jwt = true
 
