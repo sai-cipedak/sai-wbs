@@ -57,6 +57,9 @@ verify_jwt = true
 [functions.grievance-case-action]
 verify_jwt = true
 
+[functions.grievance-followup-action]
+verify_jwt = true
+
 [functions.admin-user-access-action]
 verify_jwt = true
 
