@@ -87,7 +87,7 @@ function evidenceCard(caseId, item, canReview, section) {
     authority.addEventListener('click', async () => {
       try {
         await invoke({ action: 'SET_REVIEW', caseId, evidenceId: item.id, reviewState: 'RESTRICTED', accessScope: 'AUTHORITY_ONLY', reviewNote: 'Dibatasi oleh otoritas case.' });
-        await render();
+        await render(true);
       } catch (e) { message(section, e.message, 'error'); }
     });
     const team = document.createElement('button');
@@ -95,7 +95,7 @@ function evidenceCard(caseId, item, canReview, section) {
     team.addEventListener('click', async () => {
       try {
         await invoke({ action: 'SET_REVIEW', caseId, evidenceId: item.id, reviewState: 'CLEARED', accessScope: 'INVESTIGATION_TEAM' });
-        await render();
+        await render(true);
       } catch (e) { message(section, e.message, 'error'); }
     });
     const remove = document.createElement('button');
@@ -106,7 +106,7 @@ function evidenceCard(caseId, item, canReview, section) {
       if (!confirm('File akan dipindahkan ke Trash Google Drive dan tidak dapat diakses dari portal. Lanjutkan?')) return;
       try {
         await invoke({ action: 'REMOVE', caseId, evidenceId: item.id, removalNote: note });
-        await render();
+        await render(true);
       } catch (e) { message(section, e.message, 'error'); }
     });
     actions.append(authority, team, remove);
@@ -136,15 +136,15 @@ async function upload(caseId, section, listData) {
   message(section, 'Bukti tersimpan privat dan upload dicatat di audit trail.', 'success');
   fileInput.value = '';
   section.querySelector('.evidence-description').value = '';
-  await render();
+  await render(true);
 }
 
-async function render() {
+async function render(force = false) {
   if (rendering || !detail) return;
   const caseId = activeCaseId();
   if (!caseId || !detail.children.length) return;
   const existing = detail.querySelector('.evidence-workspace');
-  if (existing?.dataset.caseId === caseId) return;
+  if (!force && existing?.dataset.caseId === caseId) return;
   rendering = true;
   try {
     const data = await invoke({ action: 'LIST', caseId });
