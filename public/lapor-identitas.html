@@ -6,6 +6,7 @@
   <meta name="description" content="Sampaikan laporan dengan identitas melalui Portal Pelaporan SAI Cipedak." />
   <title>Lapor dengan Identitas — SAI Cipedak</title>
   <link rel="stylesheet" href="assets/css/app.css" />
+  <link rel="stylesheet" href="assets/css/evidence.css?v=20260830-2" />
   <script src="assets/js/config.js"></script>
 </head>
 <body>
@@ -21,7 +22,9 @@
     <p class="eyebrow">Laporan berhasil diterima</p>
     <h2 id="resultCaseNumber"></h2>
     <p id="identityProtection"></p>
-    <div class="action-row"><a class="button primary" href="my-reports.html">Lihat Laporan Saya</a><a class="button secondary" href="index.html">Kembali ke beranda</a></div>
+    <p class="muted">Laporan sudah tersimpan. Jika memiliki dokumen, foto, rekaman, atau bukti lain, Anda dapat menambahkannya sekarang. Langkah ini opsional dan tidak memengaruhi keberhasilan pengiriman laporan.</p>
+    <div id="initialEvidence" hidden></div>
+    <div class="action-row"><a class="button primary" href="my-reports.html">Lihat Laporan Saya</a><a class="button secondary" href="index.html">Selesai / Kembali ke beranda</a></div>
   </section>
 
   <section id="loginPanel" class="form-card">
@@ -56,6 +59,6 @@
   </section>
 </main>
 <footer class="container">SAI Cipedak · Portal Pelaporan</footer>
-<script type="module" src="assets/js/identified-report.js?v=20260827-2"></script>
+<script type="module" src="assets/js/identified-report.js?v=20260830-3"></script>
 </body>
 </html>
