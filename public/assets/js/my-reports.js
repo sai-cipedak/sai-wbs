@@ -1,4 +1,5 @@
 import { supabaseClient } from './supabase-client.js';
+import { mountIdentifiedEvidence } from './reporter-evidence.js?v=20260830-1';
 
 const loginPanel=document.querySelector('#loginPanel');
 const workspacePanel=document.querySelector('#workspacePanel');
@@ -17,7 +18,10 @@ function render(rows){reportList.replaceChildren();if(!rows.length){const empty=
   if(item.hasilAkhir){const final=el('div',null,'action-card');final.append(el('h3','Hasil Akhir'));for(const o of item.hasilAkhir.outcomes??[]){final.append(el('p',`Dugaan ${o.sequenceNo}: ${o.label}`,'case-copy'));}if(item.hasilAkhir.ringkasan)final.append(el('h4','Ringkasan'),el('p',item.hasilAkhir.ringkasan,'case-copy'));card.append(final);}
   const comm=el('div',null,'action-card');comm.append(el('h3','Komunikasi dengan Tim Penanganan'));if(!(item.pesan??[]).length)comm.append(el('p','Belum ada pesan.','muted'));for(const m of item.pesan??[]){const row=el('div',null,'message-item');row.append(el('strong',m.dari),el('p',m.isi),el('small',fmt(m.waktu)));comm.append(row);}
   if(item.canMessage){const ta=document.createElement('textarea');ta.rows=3;ta.placeholder='Tulis informasi tambahan atau balasan untuk Tim Penanganan.';const btn=el('button','Kirim pesan','secondary');btn.type='button';btn.addEventListener('click',async()=>{const text=ta.value.trim();if(text.length<5)return show('Pesan minimal 5 karakter.','error');try{show('Mengirim pesan...');const{error}=await supabaseClient.functions.invoke('send-identified-message',{body:{caseId:item.id,message:text}});if(error){let msg=error.message;try{const c=await error.context?.json();if(c?.error)msg=c.error;}catch(_){}throw new Error(msg);}show('Pesan berhasil dikirim.');await load();}catch(e){show(e.message||'Pesan belum dapat dikirim.','error');}});comm.append(ta,btn);}else comm.append(el('p','Laporan ini sudah ditutup. Kanal pesan baru tidak lagi dibuka.','muted'));
-  card.append(comm);reportList.append(card);
+  card.append(comm);
+  const evidenceHost=el('div',null,'reporter-evidence-host');card.append(evidenceHost);
+  reportList.append(card);
+  mountIdentifiedEvidence(evidenceHost,item.id).catch((error)=>{const box=el('div',error.message||'Bukti belum dapat dimuat.','form-message error');evidenceHost.replaceChildren(box);});
  }}
 async function authorize(){const{data:{session}}=await supabaseClient.auth.getSession();if(!session?.user){loginPanel.hidden=false;workspacePanel.hidden=true;return;}loginPanel.hidden=true;workspacePanel.hidden=false;userLabel.textContent=session.user.email||'Akun Google';try{await load();}catch(e){show(e.message,'error');}}
 document.querySelector('#googleLogin')?.addEventListener('click',async()=>{const redirectTo=new URL('my-reports.html',window.location.href).href;const{error}=await supabaseClient.auth.signInWithOAuth({provider:'google',options:{redirectTo}});if(error){loginMessage.textContent=error.message;loginMessage.className='form-message error';loginMessage.hidden=false;}});
