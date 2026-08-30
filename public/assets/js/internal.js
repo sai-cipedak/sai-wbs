@@ -9,6 +9,7 @@ const caseDetail = document.querySelector('#caseDetail');
 const pageMessage = document.querySelector('#pageMessage');
 let currentCases = [];
 let selectedCaseId = null;
+let allowUat = false;
 
 const STATUS_LABELS = {
   SUBMITTED: 'Laporan Diterima', UNDER_REVIEW: 'Sedang Ditelaah', MORE_INFO_REQUIRED: 'Informasi Tambahan Diperlukan',
@@ -20,6 +21,10 @@ const CLASS_LABELS = { INTEGRITY: 'Pelanggaran Integritas', SAFEGUARDING: 'Kesel
 function fmtDate(value) { return value ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—'; }
 function el(tag, text, className) { const node = document.createElement(tag); if (text != null) node.textContent = text; if (className) node.className = className; return node; }
 function showMessage(text, kind = 'info') { pageMessage.textContent = text; pageMessage.className = `form-message internal-message ${kind}`; pageMessage.hidden = !text; }
+function roleActive(rows, code) {
+  const now = Date.now();
+  return (rows ?? []).filter((r) => r.role_code === code).some((r) => new Date(r.active_from).getTime() <= now && (!r.active_until || now < new Date(r.active_until).getTime()));
+}
 
 async function getSession() { return (await supabaseClient.auth.getSession()).data.session; }
 
@@ -27,24 +32,32 @@ async function authorize() {
   const session = await getSession();
   if (!session?.user) { loginPanel.hidden = false; dashboardPanel.hidden = true; return; }
   userLabel.textContent = session.user.email || 'Akun internal';
-  const { data: roles, error } = await supabaseClient.from('user_system_roles').select('role_code, active_from, active_until').eq('user_id', session.user.id).eq('role_code', 'TRIAGE');
-  const now = Date.now();
-  const active = !error && (roles ?? []).some((r) => new Date(r.active_from).getTime() <= now && (!r.active_until || now < new Date(r.active_until).getTime()));
+  const { data: roles, error } = await supabaseClient.from('user_system_roles')
+    .select('role_code, active_from, active_until')
+    .eq('user_id', session.user.id)
+    .in('role_code', ['TRIAGE', 'SYSTEM_ADMIN']);
+  const active = !error && roleActive(roles, 'TRIAGE');
   if (!active) {
     loginPanel.hidden = false; dashboardPanel.hidden = true;
     loginMessage.textContent = 'Akun ini belum memiliki kewenangan Penelaah Awal.'; loginMessage.className = 'form-message error'; loginMessage.hidden = false;
     return;
   }
-  loginPanel.hidden = true; dashboardPanel.hidden = false; await loadCases();
+  const requestedUat = new URLSearchParams(location.search).get('uat') === '1';
+  allowUat = requestedUat && roleActive(roles, 'SYSTEM_ADMIN');
+  loginPanel.hidden = true; dashboardPanel.hidden = false;
+  if (requestedUat && !allowUat) showMessage('Mode UAT hanya tersedia untuk SYSTEM_ADMIN aktif.', 'error');
+  else if (allowUat) showMessage('Mode UAT aktif — data test ditampilkan bersama antrean Penelaahan Awal.');
+  await loadCases();
 }
 
 async function loadCases() {
-  showMessage('');
-  const { data, error } = await supabaseClient.from('cases')
-    .select('id, public_case_id, reporting_mode, status, classification, authority_code, submitted_at')
-    .eq('authority_code', 'TRIAGE')
-    .eq('is_test_data', false)
-    .order('submitted_at', { ascending: false });
+  const preservedMessage = allowUat ? 'Mode UAT aktif — data test ditampilkan bersama antrean Penelaahan Awal.' : '';
+  showMessage(preservedMessage);
+  let query = supabaseClient.from('cases')
+    .select('id, public_case_id, reporting_mode, status, classification, authority_code, submitted_at, is_test_data, test_label')
+    .eq('authority_code', 'TRIAGE');
+  if (!allowUat) query = query.eq('is_test_data', false);
+  const { data, error } = await query.order('submitted_at', { ascending: false });
   if (error) { showMessage('Antrean laporan belum dapat dimuat.', 'error'); return; }
   currentCases = data ?? [];
   renderCaseList();
@@ -60,6 +73,7 @@ function renderCaseList() {
     const button = el('button', null, `case-list-button${item.id === selectedCaseId ? ' active' : ''}`);
     button.type = 'button'; button.dataset.caseId = item.id;
     button.append(el('strong', item.public_case_id), el('span', STATUS_LABELS[item.status] ?? item.status), el('span', fmtDate(item.submitted_at)));
+    if (item.is_test_data) button.append(el('span', `UAT${item.test_label ? ` · ${item.test_label}` : ''}`, 'status-badge'));
     button.addEventListener('click', () => selectCase(item.id));
     caseList.append(button);
   }
@@ -92,7 +106,9 @@ function renderDetail(item, report, messages) {
     ['Klasifikasi', item.classification ? CLASS_LABELS[item.classification] : 'Belum ditentukan'], ['Diterima', fmtDate(item.submitted_at)],
   ];
   for (const [label, value] of metaItems) { const box = el('div'); box.append(el('span', label), el('strong', value)); meta.append(box); }
-  head.append(meta); caseDetail.append(head);
+  head.append(meta);
+  if (item.is_test_data) { const note = el('div', null, 'notice'); note.append(el('strong', 'Data UAT / Test'), el('p', item.test_label || 'Case ini ditandai sebagai data pengujian.')); head.append(note); }
+  caseDetail.append(head);
 
   const story = el('section', null, 'case-section'); story.append(el('h3', 'Uraian laporan'), el('p', report.narrative, 'case-copy'));
   if (report.people_involved_text) story.append(el('h3', 'Pihak terkait'), el('p', report.people_involved_text, 'case-copy'));
@@ -141,7 +157,7 @@ async function runAction(action, caseId, payload) {
 }
 
 document.querySelector('#googleLogin')?.addEventListener('click', async () => {
-  const redirectTo = new URL('internal.html', window.location.href).href;
+  const redirectTo = new URL(`internal.html${location.search}`, window.location.href).href;
   const { error } = await supabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
   if (error) { loginMessage.textContent = error.message; loginMessage.hidden = false; }
 });
