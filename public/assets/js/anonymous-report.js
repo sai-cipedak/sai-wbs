@@ -1,11 +1,13 @@
 import { invokePublic } from './supabase-client.js';
 import { getIntakePayload, setBusy, showMessage } from './form-utils.js';
+import { mountAnonymousEvidence } from './reporter-evidence.js?v=20260830-2';
 
 const form = document.querySelector('#anonymousReportForm');
 const message = document.querySelector('#formMessage');
 const result = document.querySelector('#successResult');
 const caseNumber = document.querySelector('#resultCaseNumber');
 const secretKey = document.querySelector('#resultSecretKey');
+const evidenceContainer = document.querySelector('#initialEvidence');
 const ATTEMPT_KEY = 'sai-wbs:anonymous-report-attempt:v1';
 const BASE32 = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 let inFlight = false;
@@ -73,6 +75,21 @@ form?.addEventListener('submit', async (event) => {
     result.hidden = false;
     window.scrollTo({ top: 0, behavior: 'smooth' });
     clearAttempt();
+    if (evidenceContainer) {
+      evidenceContainer.hidden = false;
+      try {
+        await mountAnonymousEvidence(evidenceContainer, {
+          nomorLaporan: data.nomorLaporan,
+          kunciRahasia: data.kunciRahasia,
+        });
+      } catch (evidenceError) {
+        evidenceContainer.replaceChildren();
+        const note = document.createElement('p');
+        note.className = 'form-message error';
+        note.textContent = `${evidenceError.message || 'Bukti belum dapat dimuat.'} Laporan Anda tetap sudah tersimpan; bukti dapat ditambahkan nanti melalui Cek Laporan menggunakan Nomor Laporan dan Kunci Rahasia.`;
+        evidenceContainer.append(note);
+      }
+    }
   } catch (error) {
     showMessage(message, error instanceof Error ? error.message : 'Laporan belum dapat dikirim.', 'error');
   } finally {
