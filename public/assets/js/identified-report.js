@@ -1,5 +1,6 @@
 import { supabaseClient } from './supabase-client.js';
 import { getIntakePayload, setBusy, showMessage } from './form-utils.js';
+import { mountIdentifiedEvidence } from './reporter-evidence.js?v=20260830-2';
 
 const loginPanel = document.querySelector('#loginPanel');
 const formPanel = document.querySelector('#identifiedFormPanel');
@@ -7,6 +8,7 @@ const form = document.querySelector('#identifiedReportForm');
 const identityLabel = document.querySelector('#identityLabel');
 const message = document.querySelector('#formMessage');
 const result = document.querySelector('#successResult');
+const evidenceContainer = document.querySelector('#initialEvidence');
 const ATTEMPT_KEY = 'sai-wbs:identified-report-attempt:v1';
 let inFlight = false;
 let memoryAttempt = null;
@@ -75,6 +77,18 @@ form?.addEventListener('submit', async (event) => {
     result.hidden = false;
     window.scrollTo({ top: 0, behavior: 'smooth' });
     clearAttempt();
+    if (evidenceContainer) {
+      evidenceContainer.hidden = false;
+      try {
+        await mountIdentifiedEvidence(evidenceContainer, { publicCaseId: data.nomorLaporan });
+      } catch (evidenceError) {
+        evidenceContainer.replaceChildren();
+        const note = document.createElement('p');
+        note.className = 'form-message error';
+        note.textContent = `${evidenceError.message || 'Bukti belum dapat dimuat.'} Laporan Anda tetap sudah tersimpan; bukti dapat ditambahkan nanti dari Laporan Saya.`;
+        evidenceContainer.append(note);
+      }
+    }
   } catch (error) {
     showMessage(message, error instanceof Error ? error.message : 'Laporan belum dapat dikirim.', 'error');
   } finally {
