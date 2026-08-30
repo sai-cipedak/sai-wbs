@@ -1,11 +1,13 @@
 import { invokePublic } from './supabase-client.js';
 import { setBusy, showMessage } from './form-utils.js';
+import { mountAnonymousEvidence } from './reporter-evidence.js?v=20260830-1';
 
 const form = document.querySelector('#checkReportForm');
 const message = document.querySelector('#formMessage');
 const result = document.querySelector('#reportResult');
 const replyForm = document.querySelector('#replyForm');
 const replyMessage = document.querySelector('#replyMessage');
+const evidenceHost = document.querySelector('#anonymousEvidence');
 let currentCredentials = null;
 
 async function loadReport(credentials) {
@@ -50,6 +52,15 @@ async function loadReport(credentials) {
   });
   result.hidden = false;
   replyForm.hidden = data.canReply === false;
+  if (evidenceHost) {
+    evidenceHost.replaceChildren();
+    mountAnonymousEvidence(evidenceHost, credentials).catch((error) => {
+      const box = document.createElement('div');
+      box.className = 'form-message error';
+      box.textContent = error.message || 'Bukti belum dapat dimuat.';
+      evidenceHost.replaceChildren(box);
+    });
+  }
 }
 
 form?.addEventListener('submit', async (event) => {
@@ -67,6 +78,7 @@ form?.addEventListener('submit', async (event) => {
     currentCredentials = credentials;
   } catch (error) {
     result.hidden = true;
+    evidenceHost?.replaceChildren();
     currentCredentials = null;
     showMessage(message, error instanceof Error ? error.message : 'Laporan belum dapat diperiksa.', 'error');
   } finally { setBusy(button, false, 'Memeriksa…'); }
