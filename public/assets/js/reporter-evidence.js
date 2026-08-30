@@ -23,7 +23,13 @@ function formatSize(value) {
 }
 
 function makeAccess(kind, value) {
-  if (kind === 'IDENTIFIED') return { kind, caseId: value };
+  if (kind === 'IDENTIFIED') {
+    if (value && typeof value === 'object') {
+      if (value.caseId) return { kind, caseId: value.caseId };
+      if (value.publicCaseId) return { kind, publicCaseId: value.publicCaseId };
+    }
+    return { kind, caseId: value };
+  }
   return { kind, nomorLaporan: value.nomorLaporan, kunciRahasia: value.kunciRahasia };
 }
 
@@ -41,7 +47,10 @@ async function authHeaders(access) {
 }
 
 function payload(access, body) {
-  if (access.kind === 'IDENTIFIED') return { ...body, caseId: access.caseId, actorContext: 'REPORTER' };
+  if (access.kind === 'IDENTIFIED') {
+    const caseRef = access.caseId ? { caseId: access.caseId } : { publicCaseId: access.publicCaseId };
+    return { ...body, ...caseRef, actorContext: 'REPORTER' };
+  }
   return { ...body, nomorLaporan: access.nomorLaporan, kunciRahasia: access.kunciRahasia, actorContext: 'REPORTER' };
 }
 
@@ -164,7 +173,7 @@ async function render(container, access) {
   const titleText = el('div');
   titleText.append(
     el('h3', 'Bukti Pendukung'),
-    el('p', 'File disimpan privat. Bukti yang Anda kirim hanya terlihat oleh tim berwenang sampai dilakukan review akses.', 'muted'),
+    el('p', 'Punya dokumen, foto, rekaman, atau bukti lain? Anda dapat menambahkannya sekarang atau nanti. File disimpan privat dan harus direview sebelum dapat dibuka ke Tim Pemeriksa.', 'muted'),
   );
   const refreshButton = el('button', 'Segarkan Bukti', 'text-button');
   refreshButton.type = 'button';
@@ -180,7 +189,7 @@ async function render(container, access) {
 
   if (data.canUpload) {
     const uploadBox = el('div', null, 'evidence-upload');
-    uploadBox.append(el('h4', 'Tambah bukti'));
+    uploadBox.append(el('h4', 'Tambah bukti (opsional)'));
     const file = document.createElement('input');
     file.className = 'reporter-evidence-file';
     file.type = 'file';
@@ -202,7 +211,7 @@ async function render(container, access) {
         uploadButton.disabled = false;
       }
     });
-    uploadBox.append(file, description, uploadButton, el('small', `Maksimum ${Math.round(data.policy.maxFileSizeBytes / 1048576)} MB. Setelah disubmit, bukti menjadi bagian audit trail dan tidak dapat dihapus sendiri oleh pelapor.`));
+    uploadBox.append(file, description, uploadButton, el('small', `Maksimum ${Math.round(data.policy.maxFileSizeBytes / 1048576)} MB per file. Upload dapat diulang untuk menambahkan beberapa file. Setelah disubmit, bukti menjadi bagian audit trail dan tidak dapat dihapus sendiri oleh pelapor.`));
     section.append(uploadBox);
   } else {
     section.append(el('p', 'Laporan sudah selesai; bukti baru tidak dapat ditambahkan.', 'muted'));
@@ -215,8 +224,8 @@ async function render(container, access) {
   }
 }
 
-export async function mountIdentifiedEvidence(container, caseId) {
-  return render(container, makeAccess('IDENTIFIED', caseId));
+export async function mountIdentifiedEvidence(container, caseRef) {
+  return render(container, makeAccess('IDENTIFIED', caseRef));
 }
 
 export async function mountAnonymousEvidence(container, credentials) {
