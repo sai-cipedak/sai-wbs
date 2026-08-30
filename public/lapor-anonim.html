@@ -6,6 +6,7 @@
   <meta name="description" content="Sampaikan laporan tanpa menyebutkan identitas melalui Portal Pelaporan SAI Cipedak." />
   <title>Lapor Tanpa Identitas — SAI Cipedak</title>
   <link rel="stylesheet" href="assets/css/app.css" />
+  <link rel="stylesheet" href="assets/css/evidence.css?v=20260830-2" />
   <script src="assets/js/config.js"></script>
 </head>
 <body>
@@ -20,10 +21,12 @@
   <section id="successResult" class="result-card success" hidden>
     <p class="eyebrow">Laporan berhasil diterima</p>
     <h2>Simpan dua informasi ini sekarang.</h2>
-    <p>Kunci Rahasia tidak dapat ditampilkan kembali oleh sistem.</p>
+    <p>Kunci Rahasia tidak dapat ditampilkan kembali oleh sistem. Simpan sebelum meninggalkan halaman ini.</p>
     <div class="credential-row"><div><span>Nomor Laporan</span><strong id="resultCaseNumber"></strong></div><button type="button" class="small secondary" data-copy-target="#resultCaseNumber">Salin</button></div>
     <div class="credential-row"><div><span>Kunci Rahasia</span><strong id="resultSecretKey"></strong></div><button type="button" class="small secondary" data-copy-target="#resultSecretKey">Salin</button></div>
-    <a class="button primary" href="cek-laporan.html">Cek perkembangan laporan</a>
+    <p class="muted">Laporan sudah tersimpan. Jika memiliki dokumen, foto, rekaman, atau bukti lain, Anda dapat menambahkannya sekarang. Langkah ini opsional dan kegagalan upload tidak membatalkan laporan.</p>
+    <div id="initialEvidence" hidden></div>
+    <div class="action-row"><a class="button primary" href="cek-laporan.html">Selesai / Cek perkembangan laporan</a><a class="button secondary" href="index.html">Kembali ke beranda</a></div>
   </section>
 
   <form id="anonymousReportForm" class="report-form">
@@ -71,6 +74,6 @@
   </form>
 </main>
 <footer class="container">SAI Cipedak · Portal Pelaporan</footer>
-<script type="module" src="assets/js/anonymous-report.js?v=20260830-1"></script>
+<script type="module" src="assets/js/anonymous-report.js?v=20260830-3"></script>
 </body>
 </html>
