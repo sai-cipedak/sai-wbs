@@ -104,12 +104,11 @@ Deno.serve(async(req:Request)=>{
         await admin.from('audit_logs').insert({organization_id:c.organization_id,case_id:caseId,actor_user_id:user.id,event_type:'ALLEGATION_UPDATED',object_type:'case_allegation',object_id:data.id,details:{sequence_no:data.sequence_no}});
         return json({ok:true,allegation:data});
       }
-      const {data:maxRow}=await admin.from('case_allegations').select('sequence_no').eq('case_id',caseId).order('sequence_no',{ascending:false}).limit(1).maybeSingle();
-      const sequenceNo=(maxRow?.sequence_no??0)+1;
-      const {data,error}=await admin.from('case_allegations').insert({case_id:caseId,sequence_no:sequenceNo,statement,created_by:user.id}).select('id,sequence_no,statement,status').single();
-      if(error) throw error;
-      await admin.from('audit_logs').insert({organization_id:c.organization_id,case_id:caseId,actor_user_id:user.id,event_type:'ALLEGATION_ADDED',object_type:'case_allegation',object_id:data.id,details:{sequence_no:sequenceNo}});
-      return json({ok:true,allegation:data});
+      const {data,error}=await admin.rpc('add_case_allegation_atomic',{p_case_id:caseId,p_actor_user_id:user.id,p_statement:statement});
+      if(error||!data) throw error ?? new Error('ALLEGATION_INSERT_FAILED');
+      const allegation=data as {id:string;sequence_no:number;statement:string;status:string};
+      await admin.from('audit_logs').insert({organization_id:c.organization_id,case_id:caseId,actor_user_id:user.id,event_type:'ALLEGATION_ADDED',object_type:'case_allegation',object_id:allegation.id,details:{sequence_no:allegation.sequence_no}});
+      return json({ok:true,allegation});
     }
 
     if(action==='SAVE_FINDING'){
