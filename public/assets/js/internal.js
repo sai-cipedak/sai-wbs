@@ -55,7 +55,8 @@ async function loadCases() {
   showMessage(preservedMessage);
   let query = supabaseClient.from('cases')
     .select('id, public_case_id, reporting_mode, status, classification, authority_code, submitted_at, is_test_data, test_label')
-    .eq('authority_code', 'TRIAGE');
+    .eq('authority_code', 'TRIAGE')
+    .not('status', 'in', '(CLOSED,OUT_OF_SCOPE)');
   if (!allowUat) query = query.eq('is_test_data', false);
   const { data, error } = await query.order('submitted_at', { ascending: false });
   if (error) { showMessage('Antrean laporan belum dapat dimuat.', 'error'); return; }
