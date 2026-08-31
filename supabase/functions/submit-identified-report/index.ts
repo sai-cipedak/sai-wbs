@@ -68,41 +68,40 @@ Deno.serve(async (req: Request) => {
     if (existingProfile && existingProfile.organization_id !== org.id) throw new Error('Profile akun berada pada organisasi berbeda.');
     const profileMemberType = existingProfile?.member_type === 'INTERNAL' ? 'INTERNAL' : membership.member_type;
     const profileIsActive = existingProfile ? existingProfile.is_active : true;
-    const { error: profileError } = await admin.from('profiles').upsert({ user_id: user.id, organization_id: org.id, display_name: displayName, email, member_type: profileMemberType, is_active: profileIsActive, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
-    if (profileError) throw profileError;
 
     const safetyFastLane = intake.childSafetyRisk;
     const publicCaseId = generatePublicCaseId();
-    const { data: createdCase, error: caseError } = await admin.from('cases').insert({
-      organization_id: org.id,
-      public_case_id: publicCaseId,
-      reporting_mode: 'IDENTIFIED',
-      status: safetyFastLane ? 'REFERRED_SAFEGUARDING' : 'SUBMITTED',
-      classification: safetyFastLane ? 'SAFEGUARDING' : null,
-      priority: safetyFastLane ? 'CRITICAL' : null,
-      authority_code: safetyFastLane ? 'HSE' : 'TRIAGE',
-      policy_version_id: org.active_policy_version_id,
-      created_by_user_id: user.id,
-      submission_token: submissionToken || null,
-      is_test_data: false,
-    }).select('id, submitted_at').single();
+    const { data: created, error: createError } = await admin.rpc('create_identified_submission_atomic', {
+      p_organization_id: org.id,
+      p_policy_version_id: org.active_policy_version_id,
+      p_user_id: user.id,
+      p_email: email,
+      p_display_name: displayName,
+      p_profile_member_type: profileMemberType,
+      p_profile_is_active: profileIsActive,
+      p_public_case_id: publicCaseId,
+      p_submission_token: submissionToken || null,
+      p_intake: intake,
+      p_safety_fast_lane: safetyFastLane,
+      p_idempotency_enabled: !!submissionToken,
+    });
 
-    if (caseError || !createdCase) {
-      if (submissionToken && (caseError as any)?.code === '23505') {
+    if (createError || !created) {
+      if (submissionToken && (createError as any)?.code === '23505') {
         const existing = await existingSubmission(user.id, submissionToken);
         if (existing) return existingResponse(existing);
       }
-      throw caseError ?? new Error('Gagal membuat laporan.');
+      if ((createError?.message ?? '').includes('PROFILE_ORG_MISMATCH')) throw new Error('Profile akun berada pada organisasi berbeda.');
+      throw createError ?? new Error('Gagal membuat laporan.');
     }
 
-    const cleanup = async () => { await admin.from('cases').delete().eq('id', createdCase.id); };
-    const { error: reportError } = await admin.from('case_reports').insert({ case_id: createdCase.id, title: intake.title, narrative: intake.narrative, incident_date: intake.incidentDate, incident_time_text: intake.incidentTimeText, location_text: intake.locationText, child_safety_risk: intake.childSafetyRisk, ongoing_risk: intake.ongoingRisk, people_involved_text: intake.peopleInvolvedText });
-    if (reportError) { await cleanup(); throw reportError; }
-    const { error: identityError } = await admin.from('case_reporter_identities').insert({ case_id: createdCase.id, user_id: user.id, reporter_name: displayName, reporter_email: email, visibility_status: 'HIDDEN' });
-    if (identityError) { await cleanup(); throw identityError; }
-    await admin.from('audit_logs').insert({ organization_id: org.id, case_id: createdCase.id, actor_user_id: user.id, event_type: 'CASE_SUBMITTED_IDENTIFIED', object_type: 'case', object_id: createdCase.id, details: { safety_fast_lane: safetyFastLane, profile_member_type_preserved: profileMemberType === 'INTERNAL', idempotency_enabled: !!submissionToken } });
-
-    return jsonResponse({ nomorLaporan: publicCaseId, status: safetyFastLane ? 'Sedang Ditangani' : 'Laporan Diterima', submittedAt: createdCase.submitted_at, identityProtection, duplicatePrevented: false }, 201, corsHeaders);
+    return jsonResponse({
+      nomorLaporan: created.publicCaseId ?? publicCaseId,
+      status: safetyFastLane ? 'Sedang Ditangani' : 'Laporan Diterima',
+      submittedAt: created.submittedAt,
+      identityProtection,
+      duplicatePrevented: false,
+    }, 201, corsHeaders);
   } catch (error) {
     console.error('submit-identified-report', error);
     const message = error instanceof Error && /^(Judul|Uraian|Format|Isian)/.test(error.message) ? error.message : 'Laporan belum dapat dikirim. Silakan coba kembali.';
