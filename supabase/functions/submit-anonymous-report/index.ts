@@ -107,64 +107,30 @@ Deno.serve(async (req: Request) => {
     const publicCaseId = generatePublicCaseId();
     const secretHash = await sha256Base64(secretKey);
 
-    const { data: createdCase, error: caseError } = await admin
-      .from('cases')
-      .insert({
-        organization_id: org.id,
-        public_case_id: publicCaseId,
-        reporting_mode: 'ANONYMOUS',
-        status: safetyFastLane ? 'REFERRED_SAFEGUARDING' : 'SUBMITTED',
-        classification: safetyFastLane ? 'SAFEGUARDING' : null,
-        priority: safetyFastLane ? 'CRITICAL' : null,
-        authority_code: safetyFastLane ? 'HSE' : 'TRIAGE',
-        policy_version_id: org.active_policy_version_id,
-        submission_token: submissionToken || null,
-      })
-      .select('id, submitted_at, status')
-      .single();
-    if (caseError || !createdCase) {
-      if (submissionToken && (caseError as any)?.code === '23505') {
+    const { data: created, error: createError } = await admin.rpc('create_anonymous_submission_atomic', {
+      p_organization_id: org.id,
+      p_policy_version_id: org.active_policy_version_id,
+      p_public_case_id: publicCaseId,
+      p_submission_token: submissionToken || null,
+      p_secret_hash: secretHash,
+      p_intake: intake,
+      p_safety_fast_lane: safetyFastLane,
+      p_idempotency_enabled: !!submissionToken,
+    });
+
+    if (createError || !created) {
+      if (submissionToken && (createError as any)?.code === '23505') {
         const existing = await existingSubmission(submissionToken, secretKey);
         if (existing) return existingResponse(existing, secretKey);
       }
-      throw caseError ?? new Error('Gagal membuat laporan.');
+      throw createError ?? new Error('Gagal membuat laporan.');
     }
 
-    const cleanup = async () => { await admin.from('cases').delete().eq('id', createdCase.id); };
-
-    const { error: reportError } = await admin.from('case_reports').insert({
-      case_id: createdCase.id,
-      title: intake.title,
-      narrative: intake.narrative,
-      incident_date: intake.incidentDate,
-      incident_time_text: intake.incidentTimeText,
-      location_text: intake.locationText,
-      child_safety_risk: intake.childSafetyRisk,
-      ongoing_risk: intake.ongoingRisk,
-      people_involved_text: intake.peopleInvolvedText,
-    });
-    if (reportError) { await cleanup(); throw reportError; }
-
-    const { error: accessError } = await admin.from('case_anonymous_access').insert({
-      case_id: createdCase.id,
-      secret_hash: secretHash,
-    });
-    if (accessError) { await cleanup(); throw accessError; }
-
-    await admin.from('audit_logs').insert({
-      organization_id: org.id,
-      case_id: createdCase.id,
-      event_type: 'CASE_SUBMITTED_ANONYMOUS',
-      object_type: 'case',
-      object_id: createdCase.id,
-      details: { safety_fast_lane: safetyFastLane, idempotency_enabled: !!submissionToken },
-    });
-
     return jsonResponse({
-      nomorLaporan: publicCaseId,
+      nomorLaporan: created.publicCaseId ?? publicCaseId,
       kunciRahasia: secretKey,
       status: safetyFastLane ? 'Sedang Ditangani' : 'Laporan Diterima',
-      submittedAt: createdCase.submitted_at,
+      submittedAt: created.submittedAt,
       reminder: 'Simpan Nomor Laporan dan Kunci Rahasia. Kunci Rahasia tidak dapat ditampilkan kembali.',
       duplicatePrevented: false,
     }, 201, corsHeaders);
