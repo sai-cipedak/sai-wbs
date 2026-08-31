@@ -59,7 +59,7 @@ Deno.serve(async(req:Request)=>{
 
     if(action==='DETAIL'){
       const [{data:report},{data:messages},{data:notes},{data:allegations},{data:findings},{data:evidence}] = await Promise.all([
-        admin.from('case_reports').select('*').eq('case_id',caseId).single(),
+        admin.from('case_reports').select('case_id,title,narrative,incident_date,incident_time_text,location_text,child_safety_risk,ongoing_risk,people_involved_text,submitted_at').eq('case_id',caseId).single(),
         admin.from('case_messages').select('id,sender_type,body,visible_to_reporter,created_at').eq('case_id',caseId).order('created_at',{ascending:true}),
         admin.from('case_investigation_notes').select('id,author_user_id,note_type,title,body,created_at,updated_at').eq('case_id',caseId).order('created_at',{ascending:false}),
         admin.from('case_allegations').select('id,sequence_no,statement,status,created_at,updated_at').eq('case_id',caseId).order('sequence_no',{ascending:true}),
