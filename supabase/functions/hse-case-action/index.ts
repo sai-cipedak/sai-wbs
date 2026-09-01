@@ -107,33 +107,22 @@ Deno.serve(async(req:Request)=>{
     if(action==='ADD_MEMBER'){
       const email=String(body.email??'').trim().toLowerCase(),displayName=text(body.displayName,0,200),memberCategory=String(body.memberCategory??''),committeeRole=String(body.committeeRole??''),rationale=text(body.rationale,5,5000),conflictContext=text(body.conflictContext,3,2000);
       if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!['DS','MANAGEMENT','STAFF','OTS','EXTERNAL'].includes(memberCategory)||!['CASE_LEAD','INVESTIGATOR','SUBJECT_MATTER_ADVISER'].includes(committeeRole)||!rationale||!conflictContext)return json({error:'Data kandidat belum lengkap/valid.'},400);
-      const{data:m,error}=await admin.from('case_team_members').insert({case_id:caseId,email,display_name:displayName,member_category:memberCategory,committee_role:committeeRole,rationale,conflict_context:conflictContext,nomination_status:'PENDING_ACCOUNT',nominated_by:user.id}).select('id').single();
-      if(error){if((error as any).code==='23505')return json({error:'Email ini sudah menjadi kandidat aktif pada case ini.'},409);throw error;}
-      await admin.from('audit_logs').insert({organization_id:orgId,case_id:caseId,actor_user_id:user.id,event_type:'TEAM_MEMBER_NOMINATED',object_type:'case_team_member',object_id:m.id,details:{committee_role:committeeRole,authority_code:'HSE'}});
-      return json({ok:true});
+      const{data,error}=await admin.rpc('hse_add_case_team_member_atomic',{p_case_id:caseId,p_actor_user_id:user.id,p_organization_id:orgId,p_email:email,p_display_name:displayName,p_member_category:memberCategory,p_committee_role:committeeRole,p_rationale:rationale,p_conflict_context:conflictContext});
+      if(error){const m=String(error.message??'');if((error as any).code==='23505')return json({error:'Email ini sudah menjadi kandidat aktif pada case ini.'},409);if(m.includes('TEAM_FORMATION_NOT_ACTIVE'))return json({error:'Pembentukan Tim Pemeriksa hanya dapat dilakukan setelah fast-lane gate selesai.'},409);if(m.includes('CASE_NOT_FOUND'))return json({error:'Case safeguarding tidak ditemukan.'},404);if(m.includes('INVALID_'))return json({error:'Data kandidat belum lengkap/valid.'},400);throw error;}
+      return json(data);
     }
 
     if(action==='REVOKE_MEMBER'){
-      const memberId=String(body.memberId??''),now=new Date().toISOString();
-      const{data:m}=await admin.from('case_team_members').select('linked_user_id').eq('id',memberId).eq('case_id',caseId).maybeSingle();if(!m)return json({error:'Kandidat tidak ditemukan.'},404);
-      await admin.from('case_team_members').update({nomination_status:'REVOKED',revoked_at:now,updated_at:now}).eq('id',memberId);
-      if(m.linked_user_id)await admin.from('case_assignments').update({access_status:'REVOKED',revoked_at:now}).eq('case_id',caseId).eq('user_id',m.linked_user_id);
-      await admin.from('audit_logs').insert({organization_id:orgId,case_id:caseId,actor_user_id:user.id,event_type:'TEAM_MEMBER_REVOKED',object_type:'case_team_member',object_id:memberId,details:{authority_code:'HSE'}});
-      return json({ok:true});
+      const memberId=String(body.memberId??'');if(!memberId)return json({error:'Kandidat wajib dipilih.'},400);
+      const{data,error}=await admin.rpc('hse_revoke_case_team_member_atomic',{p_case_id:caseId,p_member_id:memberId,p_actor_user_id:user.id,p_organization_id:orgId});
+      if(error){const m=String(error.message??'');if(m.includes('TEAM_MEMBER_NOT_FOUND'))return json({error:'Kandidat tidak ditemukan.'},404);if(m.includes('TEAM_MEMBER_ALREADY_REVOKED'))return json({error:'Penunjukan kandidat ini sudah dicabut.'},409);if(m.includes('TEAM_FORMATION_NOT_ACTIVE'))return json({error:'Pembentukan Tim Pemeriksa sudah tidak aktif.'},409);if(m.includes('CASE_NOT_FOUND'))return json({error:'Case safeguarding tidak ditemukan.'},404);throw error;}
+      return json(data);
     }
 
     if(action==='ACTIVATE_TEAM'){
-      const{data:a}=await admin.from('case_safeguarding_assessments').select('immediate_danger').eq('case_id',caseId).order('assessed_at',{ascending:false}).limit(1).maybeSingle();if(!a)return json({error:'Safeguarding assessment belum tercatat.'},409);
-      if(a.immediate_danger){const{count}=await admin.from('case_protective_actions').select('id',{count:'exact',head:true}).eq('case_id',caseId);if(!count)return json({error:'Protective action wajib dicatat sebelum Tim Pemeriksa diaktifkan.'},409);}
-      const{data:t,error}=await admin.from('case_team_members').select('linked_user_id,committee_role').eq('case_id',caseId).eq('nomination_status','CLEARED');if(error)throw error;
-      const inv=(t??[]).filter((x:any)=>x.linked_user_id&&['CASE_LEAD','INVESTIGATOR'].includes(x.committee_role));const users=[...new Set(inv.map((x:any)=>x.linked_user_id))];
-      if(users.length<2)return json({error:'Tim Pemeriksa membutuhkan minimum 2 orang berbeda yang telah lolos deklarasi benturan kepentingan.'},409);
-      if(!inv.some((x:any)=>x.committee_role==='CASE_LEAD'))return json({error:'Tim Pemeriksa harus memiliki minimal satu Ketua Tim.'},409);
-      const now=new Date().toISOString();
-      await admin.from('case_assignments').update({access_status:'ACTIVE',revoked_at:null}).eq('case_id',caseId).in('user_id',users);
-      await admin.from('cases').update({status:'INVESTIGATION',updated_at:now}).eq('id',caseId).eq('status','COMMITTEE_FORMATION');
-      await admin.from('audit_logs').insert({organization_id:orgId,case_id:caseId,actor_user_id:user.id,event_type:'TEAM_ACTIVATED',object_type:'case',object_id:caseId,details:{authority_code:'HSE',investigator_count:users.length}});
-      return json({ok:true,status:'INVESTIGATION',investigatorCount:users.length});
+      const{data,error}=await admin.rpc('hse_activate_case_team_atomic',{p_case_id:caseId,p_actor_user_id:user.id,p_organization_id:orgId});
+      if(error){const m=String(error.message??'');if(m.includes('SAFEGUARDING_ASSESSMENT_REQUIRED'))return json({error:'Safeguarding assessment belum tercatat.'},409);if(m.includes('PROTECTIVE_ACTION_REQUIRED'))return json({error:'Protective action wajib dicatat sebelum Tim Pemeriksa diaktifkan.'},409);if(m.includes('MINIMUM_TEAM_NOT_MET'))return json({error:'Tim Pemeriksa membutuhkan minimum 2 orang berbeda yang telah lolos deklarasi benturan kepentingan.'},409);if(m.includes('CASE_LEAD_REQUIRED'))return json({error:'Tim Pemeriksa harus memiliki minimal satu Ketua Tim.'},409);if(m.includes('TEAM_ASSIGNMENT_MISSING'))return json({error:'Assignment Tim Pemeriksa belum lengkap. Muat ulang dan pastikan seluruh anggota sudah menyelesaikan deklarasi.'},409);if(m.includes('TEAM_FORMATION_NOT_ACTIVE'))return json({error:'Pembentukan Tim Pemeriksa sudah tidak aktif.'},409);if(m.includes('CASE_NOT_FOUND'))return json({error:'Case safeguarding tidak ditemukan.'},404);throw error;}
+      return json(data);
     }
 
     return json({error:'Aksi tidak dikenali.'},400);
