@@ -9,6 +9,7 @@ import {
   getDriveFileMetadata,
   startResumableDriveUpload,
   trashDriveFile,
+  restoreDriveFile,
   verifyDriveRepository,
 } from '../_shared/evidence-drive.ts';
 
@@ -235,42 +236,13 @@ async function recoverCompletedUploads(access: Access, policy: typeof DEFAULT_PO
         }
       }
 
-      const reviewedBy = session.review_state === 'CLEARED' ? access.userId : null;
-      const reviewedAt = session.review_state === 'CLEARED' ? new Date().toISOString() : null;
-      const { data: evidence, error: evidenceError } = await admin.from('case_evidence').insert({
-        case_id: access.caseRow.id,
-        drive_file_id: session.drive_file_id,
-        drive_folder_id: session.drive_folder_id,
-        storage_filename: session.storage_filename,
-        original_filename: session.original_filename,
-        mime_type: session.mime_type,
-        file_size_bytes: session.file_size_bytes,
-        sha256_hash: verifiedHash,
-        evidence_type: evidenceType(session.mime_type),
-        description: 'Recovered after verified browser upload.',
-        uploader_context: session.uploader_context,
-        uploaded_by_user_id: session.uploaded_by_user_id,
-        status: 'ACTIVE',
-        access_scope: session.access_scope,
-        review_state: session.review_state,
-        reviewed_by_user_id: reviewedBy,
-        reviewed_at: reviewedAt,
-        last_verified_at: new Date().toISOString(),
-      }).select('id').single();
-      if (evidenceError && evidenceError.code !== '23505') throw evidenceError;
-      const evidenceId = evidence?.id ?? (await admin.from('case_evidence').select('id').eq('drive_file_id', session.drive_file_id).single()).data?.id;
-      await admin.from('case_evidence_upload_sessions').update({ status: 'FINALIZED', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', session.id);
-      if (evidence?.id) {
-        await admin.from('audit_logs').insert({
-          organization_id: access.caseRow.organization_id,
-          case_id: access.caseRow.id,
-          actor_user_id: access.userId,
-          event_type: 'EVIDENCE_REGISTERED',
-          object_type: 'case_evidence',
-          object_id: evidenceId,
-          details: { uploader_context: session.uploader_context, access_scope: session.access_scope, review_state: session.review_state, mime_type: session.mime_type, file_size_bytes: session.file_size_bytes, sha256_verified: Boolean(verifiedHash), recovered_after_browser_cors: true },
-        });
-      }
+      const { error: finalizeError } = await admin.rpc('finalize_evidence_upload_atomic', {
+        p_session_id: session.id, p_case_id: access.caseRow.id, p_actor_user_id: access.userId,
+        p_uploader_context: session.uploader_context, p_verified_hash: verifiedHash,
+        p_evidence_type: evidenceType(session.mime_type), p_description: 'Recovered after verified browser upload.',
+        p_recovered: true,
+      });
+      if (finalizeError) throw finalizeError;
     } catch (error) {
       console.error('Evidence upload recovery failed', session.id, error);
     }
@@ -454,48 +426,14 @@ Deno.serve(async (req) => {
         }
       }
 
-      const description = String(body.description ?? '').trim().slice(0, 2000) || null;
-      const reviewedBy = session.review_state === 'CLEARED' ? access.userId : null;
-      const reviewedAt = session.review_state === 'CLEARED' ? new Date().toISOString() : null;
-      const { data: evidence, error: evidenceError } = await admin.from('case_evidence').insert({
-        case_id: access.caseRow.id,
-        drive_file_id: session.drive_file_id,
-        drive_folder_id: session.drive_folder_id,
-        storage_filename: session.storage_filename,
-        original_filename: session.original_filename,
-        mime_type: session.mime_type,
-        file_size_bytes: session.file_size_bytes,
-        sha256_hash: verifiedHash,
-        evidence_type: evidenceType(session.mime_type),
-        description,
-        uploader_context: session.uploader_context,
-        uploaded_by_user_id: session.uploaded_by_user_id,
-        status: 'ACTIVE',
-        access_scope: session.access_scope,
-        review_state: session.review_state,
-        reviewed_by_user_id: reviewedBy,
-        reviewed_at: reviewedAt,
-        last_verified_at: new Date().toISOString(),
-      }).select('id').single();
-      if (evidenceError) {
-        if (evidenceError.code === '23505') {
-          const { data: existing } = await admin.from('case_evidence').select('id').eq('drive_file_id', session.drive_file_id).single();
-          await admin.from('case_evidence_upload_sessions').update({ status: 'FINALIZED', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', sessionId);
-          return json({ ok: true, evidenceId: existing.id, alreadyFinalized: true });
-        }
-        throw evidenceError;
-      }
-      await admin.from('case_evidence_upload_sessions').update({ status: 'FINALIZED', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', sessionId);
-      await admin.from('audit_logs').insert({
-        organization_id: access.caseRow.organization_id,
-        case_id: access.caseRow.id,
-        actor_user_id: access.userId,
-        event_type: 'EVIDENCE_REGISTERED',
-        object_type: 'case_evidence',
-        object_id: evidence.id,
-        details: { uploader_context: session.uploader_context, access_scope: session.access_scope, review_state: session.review_state, mime_type: session.mime_type, file_size_bytes: session.file_size_bytes, sha256_verified: Boolean(verifiedHash) },
+      const { data: finalized, error: finalizeError } = await admin.rpc('finalize_evidence_upload_atomic', {
+        p_session_id: sessionId, p_case_id: access.caseRow.id, p_actor_user_id: access.userId,
+        p_uploader_context: session.uploader_context, p_verified_hash: verifiedHash,
+        p_evidence_type: evidenceType(session.mime_type),
+        p_description: String(body.description ?? '').trim().slice(0, 2000) || null, p_recovered: false,
       });
-      return json({ ok: true, evidenceId: evidence.id, sha256Verified: Boolean(verifiedHash), reviewState: session.review_state, accessScope: session.access_scope });
+      if (finalizeError) throw finalizeError;
+      return json(finalized);
     }
 
     if (action === 'SET_REVIEW') {
@@ -509,14 +447,9 @@ Deno.serve(async (req) => {
       if (!['AUTHORITY_ONLY', 'INVESTIGATION_TEAM'].includes(accessScope)) return json({ error: 'Scope akses tidak valid.' }, 400);
       if (reviewState === 'RESTRICTED') accessScope = 'AUTHORITY_ONLY';
       if (reviewState === 'RESTRICTED' && (!note || note.length < 5)) return json({ error: 'Alasan pembatasan bukti wajib diisi.' }, 400);
-      const { data: ev } = await admin.from('case_evidence').select('id,status').eq('id', evidenceId).eq('case_id', access.caseRow.id).maybeSingle();
-      if (!ev) return json({ error: 'Bukti tidak ditemukan.' }, 404);
-      if (ev.status !== 'ACTIVE') return json({ error: 'Bukti nonaktif tidak dapat direview.' }, 409);
-      const now = new Date().toISOString();
-      const { error } = await admin.from('case_evidence').update({ access_scope: accessScope, review_state: reviewState, reviewed_by_user_id: access.userId, reviewed_at: now, review_note: note }).eq('id', evidenceId).eq('case_id', access.caseRow.id);
-      if (error) throw error;
-      await admin.from('audit_logs').insert({ organization_id: access.caseRow.organization_id, case_id: access.caseRow.id, actor_user_id: access.userId, event_type: 'EVIDENCE_REVIEWED', object_type: 'case_evidence', object_id: evidenceId, details: { review_state: reviewState, access_scope: accessScope } });
-      return json({ ok: true, evidenceId, reviewState, accessScope });
+      const { data, error } = await admin.rpc('review_evidence_atomic', { p_case_id: access.caseRow.id, p_evidence_id: evidenceId, p_actor_user_id: access.userId, p_review_state: reviewState, p_access_scope: accessScope, p_note: note });
+      if (error) { const m=String(error.message??''); if(m.includes('EVIDENCE_NOT_FOUND'))return json({error:'Bukti tidak ditemukan.'},404); if(m.includes('EVIDENCE_INACTIVE'))return json({error:'Bukti nonaktif tidak dapat direview.'},409); throw error; }
+      return json(data);
     }
 
     if (action === 'QUARANTINE') {
@@ -524,12 +457,8 @@ Deno.serve(async (req) => {
       const evidenceId = String(body.evidenceId ?? '').trim();
       const note = String(body.reviewNote ?? '').trim().slice(0, 2000);
       if (!evidenceId || note.length < 5) return json({ error: 'Alasan karantina wajib diisi.' }, 400);
-      const now = new Date().toISOString();
-      const { data: updated, error } = await admin.from('case_evidence').update({ status: 'QUARANTINED', access_scope: 'AUTHORITY_ONLY', review_state: 'RESTRICTED', reviewed_by_user_id: access.userId, reviewed_at: now, review_note: note }).eq('id', evidenceId).eq('case_id', access.caseRow.id).select('id').maybeSingle();
-      if (error) throw error;
-      if (!updated) return json({ error: 'Bukti tidak ditemukan.' }, 404);
-      await admin.from('audit_logs').insert({ organization_id: access.caseRow.organization_id, case_id: access.caseRow.id, actor_user_id: access.userId, event_type: 'EVIDENCE_QUARANTINED', object_type: 'case_evidence', object_id: evidenceId, details: { reason: note } });
-      return json({ ok: true, evidenceId, status: 'QUARANTINED' });
+      const { data, error } = await admin.rpc('quarantine_evidence_atomic', { p_case_id: access.caseRow.id, p_evidence_id: evidenceId, p_actor_user_id: access.userId, p_note: note });
+      if(error){if(String(error.message??'').includes('EVIDENCE_NOT_FOUND'))return json({error:'Bukti tidak ditemukan.'},404);throw error;} return json(data);
     }
 
     if (action === 'REMOVE') {
@@ -542,26 +471,13 @@ Deno.serve(async (req) => {
       if (ev.status === 'REMOVED') return json({ ok: true, evidenceId, status: 'REMOVED', alreadyRemoved: true });
       if (!driveConfigured()) return json({ error: 'Repositori Google Drive belum dikonfigurasi untuk portal.' }, 503);
       await trashDriveFile(ev.drive_file_id);
-      const now = new Date().toISOString();
-      const { error: updateError } = await admin.from('case_evidence').update({
-        status: 'REMOVED',
-        access_scope: 'AUTHORITY_ONLY',
-        review_state: 'RESTRICTED',
-        reviewed_by_user_id: access.userId,
-        reviewed_at: now,
-        review_note: note,
-      }).eq('id', evidenceId).eq('case_id', access.caseRow.id);
-      if (updateError) throw updateError;
-      await admin.from('audit_logs').insert({
-        organization_id: access.caseRow.organization_id,
-        case_id: access.caseRow.id,
-        actor_user_id: access.userId,
-        event_type: 'EVIDENCE_REMOVED',
-        object_type: 'case_evidence',
-        object_id: evidenceId,
-        details: { removal_mode: 'DRIVE_TRASH', mime_type: ev.mime_type, file_size_bytes: ev.file_size_bytes, reason: note },
-      });
-      return json({ ok: true, evidenceId, status: 'REMOVED' });
+      const { data, error: removeError } = await admin.rpc('mark_evidence_removed_atomic', { p_case_id: access.caseRow.id, p_evidence_id: evidenceId, p_actor_user_id: access.userId, p_note: note });
+      if(removeError){
+        try { await restoreDriveFile(ev.drive_file_id); }
+        catch (restoreError) { console.error('Evidence removal compensation failed', evidenceId, restoreError); }
+        throw removeError;
+      }
+      return json(data);
     }
 
     if (action === 'DOWNLOAD') {

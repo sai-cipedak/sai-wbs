@@ -201,6 +201,17 @@ export async function trashDriveFile(fileId: string) {
   );
 }
 
+export async function restoreDriveFile(fileId: string) {
+  await driveJson(
+    `${DRIVE_API}/files/${encodeURIComponent(fileId)}?supportsAllDrives=true&fields=id,trashed`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+      body: JSON.stringify({ trashed: false }),
+    },
+  );
+}
+
 export async function getDriveFileContent(fileId: string) {
   const response = await authorizedFetch(
     `${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`,
