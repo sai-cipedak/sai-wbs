@@ -43,7 +43,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: caseRow, error: caseError } = await admin
       .from('cases')
-      .select('id, organization_id, public_case_id, reporting_mode, status, classification, priority, authority_code, closed_at')
+      .select('id, organization_id, public_case_id, status, authority_code')
       .eq('id', caseId)
       .single();
     if (caseError || !caseRow) return jsonResponse({ error: 'Laporan tidak ditemukan.' }, 404);
@@ -71,115 +71,60 @@ Deno.serve(async (req: Request) => {
     const reporterExplanation = cleanText(payload.reporterExplanation, 10, 4000);
     const reporterMessage = cleanText(payload.reporterMessage, 10, 4000);
 
-    const next: Record<string, unknown> = {};
-    let decisionClassification: string | null = null;
-    let targetAuthority = 'TRIAGE';
-    let auditEvent = '';
-    let messageBody: string | null = null;
-
     switch (action) {
       case 'START_REVIEW':
-        if (!['SUBMITTED', 'MORE_INFO_REQUIRED'].includes(caseRow.status)) return jsonResponse({ error: 'Status laporan belum dapat masuk penelaahan.' }, 409);
-        next.status = 'UNDER_REVIEW';
-        auditEvent = 'TRIAGE_REVIEW_STARTED';
+        if (!['SUBMITTED', 'MORE_INFO_REQUIRED'].includes(caseRow.status)) {
+          return jsonResponse({ error: 'Status laporan belum dapat masuk penelaahan.' }, 409);
+        }
         break;
       case 'REQUEST_INFO':
         if (!reporterMessage) return jsonResponse({ error: 'Pertanyaan untuk pelapor wajib diisi minimal 10 karakter.' }, 400);
-        next.status = 'MORE_INFO_REQUIRED';
-        messageBody = reporterMessage;
-        auditEvent = 'TRIAGE_INFO_REQUESTED';
         break;
       case 'ROUTE_INTEGRITY':
-        if (!internalReason) return jsonResponse({ error: 'Catatan alasan klasifikasi wajib diisi minimal 10 karakter.' }, 400);
-        next.status = 'COMMITTEE_FORMATION'; next.classification = 'INTEGRITY'; next.authority_code = 'SECRETARIAT';
-        decisionClassification = 'INTEGRITY'; targetAuthority = 'SECRETARIAT'; auditEvent = 'CASE_ROUTED_INTEGRITY';
-        break;
       case 'ROUTE_SAFEGUARDING':
-        if (!internalReason) return jsonResponse({ error: 'Catatan alasan klasifikasi wajib diisi minimal 10 karakter.' }, 400);
-        next.status = 'REFERRED_SAFEGUARDING'; next.classification = 'SAFEGUARDING'; next.authority_code = 'HSE';
-        decisionClassification = 'SAFEGUARDING'; targetAuthority = 'HSE'; auditEvent = 'CASE_ROUTED_SAFEGUARDING';
-        break;
       case 'ROUTE_GRIEVANCE':
         if (!internalReason) return jsonResponse({ error: 'Catatan alasan klasifikasi wajib diisi minimal 10 karakter.' }, 400);
-        next.status = 'REFERRED_GRIEVANCE'; next.classification = 'GRIEVANCE'; next.authority_code = 'GRIEVANCE';
-        decisionClassification = 'GRIEVANCE'; targetAuthority = 'GRIEVANCE'; auditEvent = 'CASE_ROUTED_GRIEVANCE';
         break;
       case 'ROUTE_DEKOM':
         if (!internalReason) return jsonResponse({ error: 'Alasan pengambilalihan Dekom wajib diisi minimal 10 karakter.' }, 400);
-        next.status = 'COMMITTEE_FORMATION'; next.authority_code = 'DEKOM';
-        targetAuthority = 'DEKOM'; auditEvent = 'CASE_ROUTED_DEKOM';
         break;
       case 'CLOSE_OUT_OF_SCOPE':
-        if (!internalReason || !reporterExplanation) return jsonResponse({ error: 'Alasan internal dan penjelasan untuk pelapor wajib diisi.' }, 400);
-        next.status = 'OUT_OF_SCOPE'; next.classification = 'OUT_OF_SCOPE'; next.closed_at = new Date().toISOString();
-        decisionClassification = 'OUT_OF_SCOPE'; auditEvent = 'CASE_CLOSED_OUT_OF_SCOPE';
-        messageBody = reporterExplanation;
+        if (!internalReason || !reporterExplanation) {
+          return jsonResponse({ error: 'Alasan internal dan penjelasan untuk pelapor wajib diisi.' }, 400);
+        }
         break;
     }
 
-    const previous = {
-      status: caseRow.status,
-      classification: caseRow.classification,
-      priority: caseRow.priority,
-      authority_code: caseRow.authority_code,
-      closed_at: caseRow.closed_at,
-    };
+    const { data: result, error: actionError } = await admin.rpc('apply_triage_action_atomic', {
+      p_case_id: caseRow.id,
+      p_actor_user_id: user.id,
+      p_expected_status: caseRow.status,
+      p_action: action,
+      p_internal_reason: internalReason,
+      p_reporter_explanation: reporterExplanation,
+      p_reporter_message: reporterMessage,
+    });
 
-    const inserted: { messageId?: string; decisionId?: string } = {};
-    try {
-      const { data: updated, error: updateError } = await admin
-        .from('cases')
-        .update({ ...next, updated_at: new Date().toISOString() })
-        .eq('id', caseRow.id)
-        .eq('authority_code', 'TRIAGE')
-        .eq('status', caseRow.status)
-        .select('id')
-        .maybeSingle();
-      if (updateError) throw updateError;
-      if (!updated) return jsonResponse({ error: 'Laporan berubah saat diproses. Muat ulang halaman.' }, 409);
-
-      if (messageBody) {
-        const { data: msg, error: msgError } = await admin.from('case_messages').insert({
-          case_id: caseRow.id,
-          sender_type: 'INTERNAL',
-          sender_user_id: user.id,
-          body: messageBody,
-          visible_to_reporter: true,
-        }).select('id').single();
-        if (msgError || !msg) throw msgError ?? new Error('Gagal menyimpan pesan.');
-        inserted.messageId = msg.id;
+    if (actionError) {
+      const message = actionError.message ?? '';
+      if (message.includes('CASE_NOT_FOUND')) return jsonResponse({ error: 'Laporan tidak ditemukan.' }, 404);
+      if (message.includes('TRIAGE_AUTHORITY_CHANGED')) {
+        return jsonResponse({ error: 'Laporan ini sudah tidak berada dalam kewenangan Penelaah Awal.' }, 409);
       }
-
-      const { data: decision, error: decisionError } = await admin.from('case_triage_decisions').insert({
-        case_id: caseRow.id,
-        reviewer_user_id: user.id,
-        action,
-        classification: decisionClassification,
-        target_authority: targetAuthority,
-        internal_reason: internalReason,
-        reporter_explanation: reporterExplanation ?? (action === 'REQUEST_INFO' ? reporterMessage : null),
-      }).select('id').single();
-      if (decisionError || !decision) throw decisionError ?? new Error('Gagal menyimpan keputusan penelaahan.');
-      inserted.decisionId = decision.id;
-
-      const { error: auditError } = await admin.from('audit_logs').insert({
-        organization_id: caseRow.organization_id,
-        case_id: caseRow.id,
-        actor_user_id: user.id,
-        event_type: auditEvent,
-        object_type: 'case',
-        object_id: caseRow.id,
-        details: { action, target_authority: targetAuthority, classification: decisionClassification },
-      });
-      if (auditError) throw auditError;
-    } catch (writeError) {
-      if (inserted.messageId) await admin.from('case_messages').delete().eq('id', inserted.messageId);
-      if (inserted.decisionId) await admin.from('case_triage_decisions').delete().eq('id', inserted.decisionId);
-      await admin.from('cases').update({ ...previous, updated_at: new Date().toISOString() }).eq('id', caseRow.id);
-      throw writeError;
+      if (message.includes('CASE_CHANGED') || message.includes('INVALID_START_REVIEW_STATUS')) {
+        return jsonResponse({ error: 'Laporan berubah saat diproses. Muat ulang halaman.' }, 409);
+      }
+      if (message.includes('INVALID_INTERNAL_REASON') || message.includes('INVALID_REPORTER_EXPLANATION') || message.includes('INVALID_REPORTER_MESSAGE') || message.includes('INVALID_ACTION') || message.includes('INVALID_ARGUMENT')) {
+        return jsonResponse({ error: 'Data aksi penelaahan tidak valid.' }, 400);
+      }
+      throw actionError;
     }
 
-    return jsonResponse({ ok: true, nomorLaporan: caseRow.public_case_id, action });
+    return jsonResponse({
+      ok: true,
+      nomorLaporan: result?.nomorLaporan ?? caseRow.public_case_id,
+      action,
+    });
   } catch (error) {
     console.error('triage-case-action', error);
     return jsonResponse({ error: 'Aksi penelaahan belum dapat disimpan. Silakan coba kembali.' }, 500);
