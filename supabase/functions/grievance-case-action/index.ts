@@ -1,46 +1,190 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2.112.4';
-const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST, OPTIONS'};
+
+const cors={
+  'Access-Control-Allow-Origin':'*',
+  'Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods':'POST, OPTIONS',
+};
 const admin=createClient(Deno.env.get('SUPABASE_URL')??'',Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')??'',{auth:{persistSession:false,autoRefreshToken:false}});
-const json=(b:unknown,s=200)=>new Response(JSON.stringify(b),{status:s,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
-async function user(req:Request){const t=(req.headers.get('Authorization')??'').replace(/^Bearer\s+/i,'');if(!t)throw new Error('UNAUTHENTICATED');const{data,error}=await admin.auth.getUser(t);if(error||!data.user)throw new Error('UNAUTHENTICATED');return data.user;}
-async function orgFor(uid:string){const now=new Date().toISOString();const{data,error}=await admin.from('user_system_roles').select('organization_id,active_from,active_until').eq('user_id',uid).eq('role_code','GRIEVANCE_COORDINATOR').lte('active_from',now);if(error)throw error;for(const r of data??[]){if(r.active_until&&r.active_until<=now)continue;const{data:p}=await admin.from('profiles').select('is_active').eq('user_id',uid).eq('organization_id',r.organization_id).maybeSingle();if(p?.is_active)return String(r.organization_id);}throw new Error('FORBIDDEN');}
-async function kase(id:string,orgId:string){const{data,error}=await admin.from('cases').select('id,public_case_id,status,classification,authority_code,reporting_mode,priority,submitted_at,updated_at,is_test_data').eq('id',id).eq('organization_id',orgId).eq('authority_code','GRIEVANCE').eq('classification','GRIEVANCE').single();if(error||!data)throw new Error('CASE_NOT_FOUND');return data;}
-const clean=(v:unknown,min=5,max=5000)=>{const s=String(v??'').trim();return s.length>=min&&s.length<=max?s:null};
-Deno.serve(async(req)=>{if(req.method==='OPTIONS')return new Response('ok',{headers:cors});if(req.method!=='POST')return json({error:'Metode tidak diizinkan.'},405);try{
- const u=await user(req),orgId=await orgFor(u.id),body=await req.json().catch(()=>({})),action=String(body.action??'LIST');
- if(action==='LIST'){
-  const{data:cases,error}=await admin.from('cases').select('id,public_case_id,status,classification,priority,reporting_mode,submitted_at,updated_at').eq('organization_id',orgId).eq('authority_code','GRIEVANCE').eq('classification','GRIEVANCE').eq('is_test_data',false).neq('status','CLOSED').neq('status','OUT_OF_SCOPE').order('updated_at',{ascending:false});if(error)throw error;
-  const ids=(cases??[]).map((c:any)=>c.id);const{data:reports}=ids.length?await admin.from('case_reports').select('case_id,title').in('case_id',ids):{data:[]} as any;const tm=new Map((reports??[]).map((r:any)=>[r.case_id,r.title]));return json({cases:(cases??[]).map((c:any)=>({...c,title:tm.get(c.id)??c.public_case_id}))});
- }
- const caseId=String(body.caseId??'');if(!caseId)return json({error:'Case ID wajib.'},400);const c=await kase(caseId,orgId);
- if(action==='DETAIL'){
-  const[{data:report},{data:review},{data:remediation},{data:messages}]=await Promise.all([
-   admin.from('case_reports').select('title,narrative,incident_date,incident_time_text,location_text,people_involved_text,child_safety_risk,ongoing_risk,submitted_at').eq('case_id',caseId).single(),
-   admin.from('case_grievance_reviews').select('id,assessment_summary,resolution_scope,created_at,updated_at').eq('case_id',caseId).maybeSingle(),
-   admin.from('case_remediation_actions').select('id,action_text,owner_text,due_date,status,completion_note,created_at,updated_at,completed_at').eq('case_id',caseId).order('created_at'),
-   admin.from('case_messages').select('id,sender_type,body,visible_to_reporter,created_at').eq('case_id',caseId).eq('visible_to_reporter',true).order('created_at')
-  ]);return json({case:c,report,review:review??null,remediation:remediation??[],messages:messages??[]});
- }
- if(action==='START_RESOLUTION'){
-  if(c.status!=='REFERRED_GRIEVANCE')return json({error:'Resolution hanya dapat dimulai dari status Sedang Ditangani.'},409);const summary=clean(body.assessmentSummary,10),scope=clean(body.resolutionScope,5,1000);if(!summary||!scope)return json({error:'Assessment dan ruang lingkup resolution wajib diisi.'},400);const now=new Date().toISOString();const{error:re}=await admin.from('case_grievance_reviews').upsert({case_id:caseId,coordinator_user_id:u.id,assessment_summary:summary,resolution_scope:scope,updated_at:now},{onConflict:'case_id'});if(re)throw re;const{data:up,error:ue}=await admin.from('cases').update({status:'REMEDIATION',updated_at:now}).eq('id',caseId).eq('status','REFERRED_GRIEVANCE').eq('authority_code','GRIEVANCE').select('id').maybeSingle();if(ue)throw ue;if(!up)return json({error:'Status case berubah. Muat ulang halaman.'},409);await admin.from('audit_logs').insert({organization_id:orgId,case_id:caseId,actor_user_id:u.id,event_type:'GRIEVANCE_RESOLUTION_STARTED',object_type:'case_grievance_review',object_id:caseId,details:{resolution_scope:scope}});return json({ok:true,status:'REMEDIATION'});
- }
- if(action==='SEND_MESSAGE'){
-  if(!['REFERRED_GRIEVANCE','REMEDIATION'].includes(c.status))return json({error:'Pesan tidak tersedia pada status ini.'},409);const msg=clean(body.message,5);if(!msg)return json({error:'Pesan wajib 5–5.000 karakter.'},400);const{data:m,error}=await admin.from('case_messages').insert({case_id:caseId,sender_type:'INTERNAL',sender_user_id:u.id,body:msg,visible_to_reporter:true}).select('id').single();if(error)throw error;await admin.from('audit_logs').insert({organization_id:orgId,case_id:caseId,actor_user_id:u.id,event_type:'GRIEVANCE_REPORTER_MESSAGE_SENT',object_type:'case_message',object_id:m.id,details:{authority_code:'GRIEVANCE'}});return json({ok:true});
- }
- if(action==='ADD_ACTION'){
-  if(c.status!=='REMEDIATION')return json({error:'Action plan hanya tersedia pada tahap Tindak Lanjut.'},409);const text=clean(body.actionText,5),owner=String(body.ownerText??'').trim().slice(0,500)||null,due=String(body.dueDate??'').trim()||null;if(!text)return json({error:'Action plan wajib 5–5.000 karakter.'},400);if(due&&!/^\d{4}-\d{2}-\d{2}$/.test(due))return json({error:'Format target tanggal tidak valid.'},400);const{data:r,error}=await admin.from('case_remediation_actions').insert({case_id:caseId,action_text:text,owner_text:owner,due_date:due,status:'PENDING',created_by:u.id}).select('id').single();if(error)throw error;await admin.from('audit_logs').insert({organization_id:orgId,case_id:caseId,actor_user_id:u.id,event_type:'GRIEVANCE_ACTION_ADDED',object_type:'case_remediation_action',object_id:r.id,details:{authority_code:'GRIEVANCE'}});return json({ok:true,id:r.id});
- }
- if(action==='COMPLETE_ACTION'){
-  if(c.status!=='REMEDIATION')return json({error:'Action plan hanya tersedia pada tahap Tindak Lanjut.'},409);const id=String(body.actionId??''),note=clean(body.completionNote,5),waive=Boolean(body.waive);if(!id||!note)return json({error:'Action dan catatan penyelesaian/waiver wajib diisi.'},400);const{data:ex}=await admin.from('case_remediation_actions').select('id,status').eq('id',id).eq('case_id',caseId).maybeSingle();if(!ex)return json({error:'Action item tidak ditemukan.'},404);if(['COMPLETED','WAIVED'].includes(ex.status))return json({error:'Action item sudah selesai.'},409);const now=new Date().toISOString(),status=waive?'WAIVED':'COMPLETED';const{error}=await admin.from('case_remediation_actions').update({status,completion_note:note,completed_by:u.id,completed_at:now,updated_at:now}).eq('id',id).eq('case_id',caseId);if(error)throw error;await admin.from('audit_logs').insert({organization_id:orgId,case_id:caseId,actor_user_id:u.id,event_type:waive?'GRIEVANCE_ACTION_WAIVED':'GRIEVANCE_ACTION_COMPLETED',object_type:'case_remediation_action',object_id:id,details:{authority_code:'GRIEVANCE'}});return json({ok:true,status});
- }
- if(action==='RETURN_TO_TRIAGE'){
-  if(c.status!=='REFERRED_GRIEVANCE')return json({error:'Case hanya dapat dikembalikan ke Penelaah Awal sebelum resolution dimulai.'},409);const reason=clean(body.reason,10);if(!reason)return json({error:'Alasan pengembalian wajib minimal 10 karakter.'},400);const now=new Date().toISOString();const{data:up,error}=await admin.from('cases').update({status:'UNDER_REVIEW',classification:null,authority_code:'TRIAGE',priority:null,updated_at:now}).eq('id',caseId).eq('status','REFERRED_GRIEVANCE').eq('authority_code','GRIEVANCE').select('id').maybeSingle();if(error)throw error;if(!up)return json({error:'Status case berubah. Muat ulang halaman.'},409);await admin.from('case_messages').insert({case_id:caseId,sender_type:'SYSTEM',body:'Laporan sedang ditelaah kembali untuk memastikan jalur penanganan yang tepat.',visible_to_reporter:true});await admin.from('audit_logs').insert({organization_id:orgId,case_id:caseId,actor_user_id:u.id,event_type:'GRIEVANCE_RETURNED_TO_TRIAGE',object_type:'case',object_id:caseId,details:{reason}});return json({ok:true,status:'UNDER_REVIEW',authorityCode:'TRIAGE'});
- }
- if(action==='ESCALATE_SAFEGUARDING'){
-  if(!['REFERRED_GRIEVANCE','REMEDIATION'].includes(c.status))return json({error:'Eskalasi safeguarding tidak tersedia pada status ini.'},409);const reason=clean(body.reason,10);if(!reason)return json({error:'Alasan eskalasi safeguarding wajib minimal 10 karakter.'},400);const now=new Date().toISOString();const{data:up,error}=await admin.from('cases').update({status:'REFERRED_SAFEGUARDING',classification:'SAFEGUARDING',authority_code:'HSE',priority:'CRITICAL',updated_at:now}).eq('id',caseId).eq('authority_code','GRIEVANCE').select('id').maybeSingle();if(error)throw error;if(!up)return json({error:'Status case berubah. Muat ulang halaman.'},409);await admin.from('case_messages').insert({case_id:caseId,sender_type:'SYSTEM',body:'Laporan dialihkan ke jalur perlindungan untuk penanganan risiko keselamatan yang memerlukan perhatian segera.',visible_to_reporter:true});await admin.from('audit_logs').insert({organization_id:orgId,case_id:caseId,actor_user_id:u.id,event_type:'GRIEVANCE_ESCALATED_SAFEGUARDING',object_type:'case',object_id:caseId,details:{reason,target_authority:'HSE'}});return json({ok:true,status:'REFERRED_SAFEGUARDING',authorityCode:'HSE'});
- }
- if(action==='CLOSE'){
-  if(c.status!=='REMEDIATION')return json({error:'Case hanya dapat ditutup pada tahap Tindak Lanjut.'},409);const outcome=String(body.resolutionOutcome??''),internal=clean(body.internalSummary,5),reporter=clean(body.reporterSummary,5);if(!internal||!reporter)return json({error:'Ringkasan internal dan untuk pelapor wajib diisi.'},400);const{data,error}=await admin.rpc('close_grievance_case',{p_case_id:caseId,p_actor_user_id:u.id,p_organization_id:orgId,p_resolution_outcome:outcome,p_internal_summary:internal,p_reporter_summary:reporter});if(error){const m=String(error.message??'');if(m.includes('PENDING_REMEDIATION'))return json({error:'Masih ada action plan yang belum selesai atau di-waive.'},409);if(m.includes('RESOLUTION_ACTION_REQUIRED'))return json({error:'Minimal satu action plan diperlukan untuk outcome ini.'},409);if(m.includes('INVALID_RESOLUTION_OUTCOME'))return json({error:'Outcome penyelesaian tidak valid.'},400);if(m.includes('GRIEVANCE_FORBIDDEN'))return json({error:'Akun tidak memiliki kewenangan Koordinator Pengaduan.'},403);throw error;}return json(data);
- }
- return json({error:'Aksi tidak dikenali.'},400);
-}catch(e){console.error('grievance-case-action',e);const m=e instanceof Error?e.message:'';if(m==='UNAUTHENTICATED')return json({error:'Silakan masuk terlebih dahulu.'},401);if(m==='FORBIDDEN')return json({error:'Akun ini tidak memiliki kewenangan Koordinator Pengaduan.'},403);if(m==='CASE_NOT_FOUND')return json({error:'Case pengaduan tidak ditemukan.'},404);return json({error:'Aksi pengaduan belum dapat diproses.'},400);}});
+const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
+const clean=(v:unknown,min=5,max=5000)=>{const s=String(v??'').trim();return s.length>=min&&s.length<=max?s:null;};
+
+async function currentUser(req:Request){
+  const token=(req.headers.get('Authorization')??'').replace(/^Bearer\s+/i,'');
+  if(!token)throw new Error('UNAUTHENTICATED');
+  const{data,error}=await admin.auth.getUser(token);
+  if(error||!data.user)throw new Error('UNAUTHENTICATED');
+  return data.user;
+}
+async function orgFor(uid:string){
+  const now=new Date().toISOString();
+  const{data,error}=await admin.from('user_system_roles').select('organization_id,active_from,active_until').eq('user_id',uid).eq('role_code','GRIEVANCE_COORDINATOR').lte('active_from',now);
+  if(error)throw error;
+  for(const r of data??[]){
+    if(r.active_until&&r.active_until<=now)continue;
+    const{data:p}=await admin.from('profiles').select('is_active').eq('user_id',uid).eq('organization_id',r.organization_id).maybeSingle();
+    if(p?.is_active)return String(r.organization_id);
+  }
+  throw new Error('FORBIDDEN');
+}
+async function getCase(id:string,orgId:string){
+  const{data,error}=await admin.from('cases').select('id,public_case_id,status,classification,authority_code,reporting_mode,priority,submitted_at,updated_at,is_test_data').eq('id',id).eq('organization_id',orgId).eq('authority_code','GRIEVANCE').eq('classification','GRIEVANCE').maybeSingle();
+  if(error)throw error;
+  if(!data)throw new Error('CASE_NOT_FOUND');
+  return data;
+}
+
+Deno.serve(async(req:Request)=>{
+  if(req.method==='OPTIONS')return new Response('ok',{headers:cors});
+  if(req.method!=='POST')return json({error:'Metode tidak diizinkan.'},405);
+  try{
+    const user=await currentUser(req);
+    const orgId=await orgFor(user.id);
+    const body=await req.json().catch(()=>({}));
+    const action=String(body.action??'LIST').toUpperCase();
+
+    if(action==='LIST'){
+      const{data:cases,error}=await admin.from('cases').select('id,public_case_id,status,classification,priority,reporting_mode,submitted_at,updated_at').eq('organization_id',orgId).eq('authority_code','GRIEVANCE').eq('classification','GRIEVANCE').eq('is_test_data',false).neq('status','CLOSED').neq('status','OUT_OF_SCOPE').order('updated_at',{ascending:false});
+      if(error)throw error;
+      const ids=(cases??[]).map((c:any)=>c.id);
+      const{data:reports,error:reportError}=ids.length?await admin.from('case_reports').select('case_id,title').in('case_id',ids):{data:[],error:null} as any;
+      if(reportError)throw reportError;
+      const titles=new Map((reports??[]).map((r:any)=>[r.case_id,r.title]));
+      return json({cases:(cases??[]).map((c:any)=>({...c,title:titles.get(c.id)??c.public_case_id}))});
+    }
+
+    const caseId=String(body.caseId??'').trim();
+    if(!caseId)return json({error:'Case ID wajib.'},400);
+    const c=await getCase(caseId,orgId);
+
+    if(action==='DETAIL'){
+      const results=await Promise.all([
+        admin.from('case_reports').select('title,narrative,incident_date,incident_time_text,location_text,people_involved_text,child_safety_risk,ongoing_risk,submitted_at').eq('case_id',caseId).single(),
+        admin.from('case_grievance_reviews').select('id,assessment_summary,resolution_scope,created_at,updated_at').eq('case_id',caseId).maybeSingle(),
+        admin.from('case_remediation_actions').select('id,action_text,owner_text,due_date,status,completion_note,created_at,updated_at,completed_at').eq('case_id',caseId).order('created_at'),
+        admin.from('case_messages').select('id,sender_type,body,visible_to_reporter,created_at').eq('case_id',caseId).eq('visible_to_reporter',true).order('created_at'),
+      ]);
+      const firstError=results.find((x)=>x.error)?.error;
+      if(firstError)throw firstError;
+      return json({case:c,report:results[0].data,review:results[1].data??null,remediation:results[2].data??[],messages:results[3].data??[]});
+    }
+
+    if(action==='START_RESOLUTION'){
+      const summary=clean(body.assessmentSummary,10);
+      const scope=clean(body.resolutionScope,5,1000);
+      if(!summary||!scope)return json({error:'Assessment dan ruang lingkup resolution wajib diisi.'},400);
+      const{data,error}=await admin.rpc('grievance_start_resolution_atomic',{p_case_id:caseId,p_actor_user_id:user.id,p_organization_id:orgId,p_assessment_summary:summary,p_resolution_scope:scope});
+      if(error){
+        const m=String(error.message??'');
+        if(m.includes('CASE_CHANGED'))return json({error:'Resolution hanya dapat dimulai dari status Sedang Ditangani.'},409);
+        if(m.includes('CASE_NOT_FOUND'))return json({error:'Case pengaduan tidak ditemukan.'},404);
+        if(m.includes('ASSESSMENT_REQUIRED')||m.includes('SCOPE_REQUIRED'))return json({error:'Assessment dan ruang lingkup resolution wajib diisi.'},400);
+        throw error;
+      }
+      return json(data);
+    }
+
+    if(action==='SEND_MESSAGE'){
+      const message=clean(body.message,5);
+      if(!message)return json({error:'Pesan wajib 5–5.000 karakter.'},400);
+      const{data,error}=await admin.rpc('grievance_send_message_atomic',{p_case_id:caseId,p_actor_user_id:user.id,p_organization_id:orgId,p_message:message});
+      if(error){
+        const m=String(error.message??'');
+        if(m.includes('CASE_CHANGED'))return json({error:'Pesan tidak tersedia pada status ini.'},409);
+        if(m.includes('CASE_NOT_FOUND'))return json({error:'Case pengaduan tidak ditemukan.'},404);
+        if(m.includes('MESSAGE_REQUIRED'))return json({error:'Pesan wajib 5–5.000 karakter.'},400);
+        throw error;
+      }
+      return json(data);
+    }
+
+    if(action==='ADD_ACTION'){
+      const actionText=clean(body.actionText,5);
+      const ownerText=String(body.ownerText??'').trim().slice(0,500)||null;
+      const dueDate=String(body.dueDate??'').trim()||null;
+      if(!actionText)return json({error:'Action plan wajib 5–5.000 karakter.'},400);
+      if(dueDate&&!/^\d{4}-\d{2}-\d{2}$/.test(dueDate))return json({error:'Format target tanggal tidak valid.'},400);
+      const{data,error}=await admin.rpc('grievance_add_action_atomic',{p_case_id:caseId,p_actor_user_id:user.id,p_organization_id:orgId,p_action_text:actionText,p_owner_text:ownerText,p_due_date:dueDate});
+      if(error){
+        const m=String(error.message??'');
+        if(m.includes('CASE_CHANGED'))return json({error:'Action plan hanya tersedia pada tahap Tindak Lanjut.'},409);
+        if(m.includes('CASE_NOT_FOUND'))return json({error:'Case pengaduan tidak ditemukan.'},404);
+        if(m.includes('ACTION_TEXT_REQUIRED'))return json({error:'Action plan wajib 5–5.000 karakter.'},400);
+        throw error;
+      }
+      return json(data);
+    }
+
+    if(action==='COMPLETE_ACTION'){
+      const actionId=String(body.actionId??'').trim();
+      const note=clean(body.completionNote,5);
+      const finalStatus=Boolean(body.waive)?'WAIVED':'COMPLETED';
+      if(!actionId||!note)return json({error:'Action dan catatan penyelesaian/waiver wajib diisi.'},400);
+      const{data,error}=await admin.rpc('grievance_finish_action_atomic',{p_case_id:caseId,p_action_id:actionId,p_actor_user_id:user.id,p_organization_id:orgId,p_final_status:finalStatus,p_completion_note:note});
+      if(error){
+        const m=String(error.message??'');
+        if(m.includes('CASE_CHANGED'))return json({error:'Action plan hanya tersedia pada tahap Tindak Lanjut.'},409);
+        if(m.includes('ACTION_NOT_FOUND'))return json({error:'Action item tidak ditemukan.'},404);
+        if(m.includes('ACTION_ALREADY_FINISHED'))return json({error:'Action item sudah selesai.'},409);
+        if(m.includes('COMPLETION_NOTE_REQUIRED'))return json({error:'Action dan catatan penyelesaian/waiver wajib diisi.'},400);
+        if(m.includes('CASE_NOT_FOUND'))return json({error:'Case pengaduan tidak ditemukan.'},404);
+        throw error;
+      }
+      return json(data);
+    }
+
+    if(action==='RETURN_TO_TRIAGE'){
+      const reason=clean(body.reason,10);
+      if(!reason)return json({error:'Alasan pengembalian wajib minimal 10 karakter.'},400);
+      const{data,error}=await admin.rpc('grievance_return_to_triage_atomic',{p_case_id:caseId,p_actor_user_id:user.id,p_organization_id:orgId,p_reason:reason});
+      if(error){
+        const m=String(error.message??'');
+        if(m.includes('CASE_CHANGED'))return json({error:'Case hanya dapat dikembalikan ke Penelaah Awal sebelum resolution dimulai.'},409);
+        if(m.includes('CASE_NOT_FOUND'))return json({error:'Case pengaduan tidak ditemukan.'},404);
+        if(m.includes('REASON_REQUIRED'))return json({error:'Alasan pengembalian wajib minimal 10 karakter.'},400);
+        throw error;
+      }
+      return json(data);
+    }
+
+    if(action==='ESCALATE_SAFEGUARDING'){
+      const reason=clean(body.reason,10);
+      if(!reason)return json({error:'Alasan eskalasi safeguarding wajib minimal 10 karakter.'},400);
+      const{data,error}=await admin.rpc('grievance_escalate_safeguarding_atomic',{p_case_id:caseId,p_actor_user_id:user.id,p_organization_id:orgId,p_reason:reason});
+      if(error){
+        const m=String(error.message??'');
+        if(m.includes('CASE_CHANGED'))return json({error:'Eskalasi safeguarding tidak tersedia pada status ini.'},409);
+        if(m.includes('CASE_NOT_FOUND'))return json({error:'Case pengaduan tidak ditemukan.'},404);
+        if(m.includes('REASON_REQUIRED'))return json({error:'Alasan eskalasi safeguarding wajib minimal 10 karakter.'},400);
+        throw error;
+      }
+      return json(data);
+    }
+
+    if(action==='CLOSE'){
+      const outcome=String(body.resolutionOutcome??'');
+      const internal=clean(body.internalSummary,5);
+      const reporter=clean(body.reporterSummary,5);
+      if(!internal||!reporter)return json({error:'Ringkasan internal dan untuk pelapor wajib diisi.'},400);
+      const{data,error}=await admin.rpc('close_grievance_case',{p_case_id:caseId,p_actor_user_id:user.id,p_organization_id:orgId,p_resolution_outcome:outcome,p_internal_summary:internal,p_reporter_summary:reporter});
+      if(error){
+        const m=String(error.message??'');
+        if(m.includes('PENDING_REMEDIATION'))return json({error:'Masih ada action plan yang belum selesai atau di-waive.'},409);
+        if(m.includes('RESOLUTION_ACTION_REQUIRED'))return json({error:'Minimal satu action plan diperlukan untuk outcome ini.'},409);
+        if(m.includes('INVALID_RESOLUTION_OUTCOME'))return json({error:'Outcome penyelesaian tidak valid.'},400);
+        if(m.includes('GRIEVANCE_FORBIDDEN'))return json({error:'Akun tidak memiliki kewenangan Koordinator Pengaduan.'},403);
+        throw error;
+      }
+      return json(data);
+    }
+
+    return json({error:'Aksi tidak dikenali.'},400);
+  }catch(e){
+    console.error('grievance-case-action',e);
+    const m=e instanceof Error?e.message:'';
+    if(m==='UNAUTHENTICATED')return json({error:'Silakan masuk terlebih dahulu.'},401);
+    if(m==='FORBIDDEN')return json({error:'Akun ini tidak memiliki kewenangan Koordinator Pengaduan.'},403);
+    if(m==='CASE_NOT_FOUND')return json({error:'Case pengaduan tidak ditemukan.'},404);
+    return json({error:'Aksi pengaduan belum dapat diproses.'},400);
+  }
+});
