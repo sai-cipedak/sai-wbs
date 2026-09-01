@@ -231,7 +231,7 @@ async function recoverCompletedUploads(access: Access, policy: typeof DEFAULT_PO
         const digest = await crypto.subtle.digest('SHA-256', await fileResponse.arrayBuffer());
         verifiedHash = hex(new Uint8Array(digest));
         if (!session.sha256_hash || verifiedHash !== String(session.sha256_hash).toLowerCase()) {
-          await admin.from('case_evidence_upload_sessions').update({ status: 'FAILED', updated_at: new Date().toISOString() }).eq('id', session.id);
+          await admin.rpc('fail_evidence_upload_session_atomic',{p_session_id:session.id,p_case_id:access.caseRow.id,p_actor_user_id:access.userId,p_uploader_context:session.uploader_context,p_final_status:'FAILED',p_reason:'RECOVERY_SHA256_MISMATCH'});
           continue;
         }
       }
@@ -324,12 +324,7 @@ Deno.serve(async (req) => {
       if (fileSizeBytes <= hashMax && (!sha256 || !/^[0-9a-f]{64}$/.test(sha256))) return json({ error: 'SHA-256 file wajib dihitung untuk file pada ukuran ini.' }, 400);
       if (fileSizeBytes > hashMax && sha256 && !/^[0-9a-f]{64}$/.test(sha256)) return json({ error: 'Format SHA-256 tidak valid.' }, 400);
 
-      const [{ count: evidenceCount }, { count: sessionCount }] = await Promise.all([
-        admin.from('case_evidence').select('id', { count: 'exact', head: true }).eq('case_id', access.caseRow.id).eq('status', 'ACTIVE'),
-        admin.from('case_evidence_upload_sessions').select('id', { count: 'exact', head: true }).eq('case_id', access.caseRow.id).eq('status', 'INITIATED').gt('expires_at', new Date().toISOString()),
-      ]);
       const maxFiles = Number(policy.max_active_files_per_case ?? DEFAULT_POLICY.max_active_files_per_case);
-      if (Number(evidenceCount ?? 0) + Number(sessionCount ?? 0) >= maxFiles) return json({ error: `Batas maksimum ${maxFiles} file aktif per case telah tercapai.` }, 409);
 
       let accessScope = 'AUTHORITY_ONLY';
       let reviewState = 'PENDING_REVIEW';
@@ -345,24 +340,17 @@ Deno.serve(async (req) => {
       const storedName = storageFilename(originalFilename);
       const expiresAt = new Date(Date.now() + 24 * 3600_000).toISOString();
 
-      const { error: sessionError } = await admin.from('case_evidence_upload_sessions').insert({
-        id: sessionId,
-        case_id: access.caseRow.id,
-        drive_file_id: driveFileId,
-        drive_folder_id: driveFolderId,
-        storage_filename: storedName,
-        original_filename: originalFilename,
-        mime_type: mimeType,
-        file_size_bytes: fileSizeBytes,
-        sha256_hash: fileSizeBytes <= hashMax ? sha256 : null,
-        uploader_context: access.uploaderContext,
-        uploaded_by_user_id: access.userId,
-        access_scope: accessScope,
-        review_state: reviewState,
-        status: 'INITIATED',
-        expires_at: expiresAt,
+      const { error: sessionError } = await admin.rpc('initiate_evidence_upload_atomic', {
+        p_session_id: sessionId, p_case_id: access.caseRow.id, p_actor_user_id: access.userId,
+        p_drive_file_id: driveFileId, p_drive_folder_id: driveFolderId, p_storage_filename: storedName,
+        p_original_filename: originalFilename, p_mime_type: mimeType, p_file_size_bytes: fileSizeBytes,
+        p_sha256_hash: fileSizeBytes <= hashMax ? sha256 : null, p_uploader_context: access.uploaderContext,
+        p_access_scope: accessScope, p_review_state: reviewState, p_expires_at: expiresAt, p_max_files: maxFiles,
       });
-      if (sessionError) throw sessionError;
+      if (sessionError) {
+        if(String(sessionError.message??'').includes('FILE_LIMIT_REACHED'))return json({error:`Batas maksimum ${maxFiles} file aktif per case telah tercapai.`},409);
+        throw sessionError;
+      }
 
       let uploadUrl: string;
       try {
@@ -375,19 +363,9 @@ Deno.serve(async (req) => {
           fileSizeBytes,
         });
       } catch (error) {
-        await admin.from('case_evidence_upload_sessions').update({ status: 'FAILED', updated_at: new Date().toISOString() }).eq('id', sessionId);
+        await admin.rpc('fail_evidence_upload_session_atomic',{p_session_id:sessionId,p_case_id:access.caseRow.id,p_actor_user_id:access.userId,p_uploader_context:access.uploaderContext,p_final_status:'FAILED',p_reason:'DRIVE_RESUMABLE_INIT_FAILED'});
         throw error;
       }
-
-      await admin.from('audit_logs').insert({
-        organization_id: access.caseRow.organization_id,
-        case_id: access.caseRow.id,
-        actor_user_id: access.userId,
-        event_type: 'EVIDENCE_UPLOAD_INITIATED',
-        object_type: 'case_evidence_upload_session',
-        object_id: sessionId,
-        details: { uploader_context: access.uploaderContext, access_scope: accessScope, mime_type: mimeType, file_size_bytes: fileSizeBytes },
-      });
       return json({ sessionId, uploadUrl, expiresAt, fileSizeBytes, mimeType });
     }
 
@@ -402,7 +380,7 @@ Deno.serve(async (req) => {
       }
       if (session.status !== 'INITIATED') return json({ error: 'Upload session tidak lagi aktif.' }, 409);
       if (Date.parse(session.expires_at) <= Date.now()) {
-        await admin.from('case_evidence_upload_sessions').update({ status: 'EXPIRED', updated_at: new Date().toISOString() }).eq('id', sessionId);
+        await admin.rpc('fail_evidence_upload_session_atomic',{p_session_id:sessionId,p_case_id:access.caseRow.id,p_actor_user_id:access.userId,p_uploader_context:access.uploaderContext,p_final_status:'EXPIRED',p_reason:'SESSION_EXPIRED'});
         return json({ error: 'Upload session sudah kedaluwarsa. Mulai upload kembali.' }, 410);
       }
       if (session.uploader_context !== access.uploaderContext || (session.uploaded_by_user_id ?? null) !== access.userId) return json({ error: 'Upload session bukan milik akses ini.' }, 403);
@@ -410,7 +388,7 @@ Deno.serve(async (req) => {
       const meta = await getDriveFileMetadata(session.drive_file_id);
       const validMeta = meta.id === session.drive_file_id && !meta.trashed && meta.name === session.storage_filename && meta.mimeType === session.mime_type && Number(meta.size ?? -1) === Number(session.file_size_bytes) && Array.isArray(meta.parents) && meta.parents.includes(session.drive_folder_id) && meta.appProperties?.sai_evidence_session === sessionId;
       if (!validMeta) {
-        await admin.from('case_evidence_upload_sessions').update({ status: 'FAILED', updated_at: new Date().toISOString() }).eq('id', sessionId);
+        await admin.rpc('fail_evidence_upload_session_atomic',{p_session_id:sessionId,p_case_id:access.caseRow.id,p_actor_user_id:access.userId,p_uploader_context:access.uploaderContext,p_final_status:'FAILED',p_reason:'DRIVE_METADATA_MISMATCH'});
         return json({ error: 'Metadata file di Google Drive tidak sesuai dengan upload session.' }, 409);
       }
 
@@ -421,7 +399,7 @@ Deno.serve(async (req) => {
         const digest = await crypto.subtle.digest('SHA-256', await fileResponse.arrayBuffer());
         verifiedHash = hex(new Uint8Array(digest));
         if (!session.sha256_hash || verifiedHash !== String(session.sha256_hash).toLowerCase()) {
-          await admin.from('case_evidence_upload_sessions').update({ status: 'FAILED', updated_at: new Date().toISOString() }).eq('id', sessionId);
+          await admin.rpc('fail_evidence_upload_session_atomic',{p_session_id:sessionId,p_case_id:access.caseRow.id,p_actor_user_id:access.userId,p_uploader_context:access.uploaderContext,p_final_status:'FAILED',p_reason:'SHA256_MISMATCH'});
           return json({ error: 'Verifikasi integritas SHA-256 file gagal.' }, 409);
         }
       }
