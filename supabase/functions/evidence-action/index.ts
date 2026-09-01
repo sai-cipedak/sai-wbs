@@ -1,6 +1,6 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2.112.4';
 import { corsHeaders } from '../_shared/cors.ts';
-import { sha256Base64, timingSafeEqual } from '../_shared/intake.ts';
+import { sha256Base64 } from '../_shared/intake.ts';
 import {
   driveConfigured,
   ensureCaseEvidenceFolder,
@@ -118,21 +118,9 @@ async function validateAnonymous(caseRow: CaseRow, secretValue: unknown) {
   if (caseRow.reporting_mode !== 'ANONYMOUS') throw new Error('ANONYMOUS_ACCESS_INVALID');
   const secret = String(secretValue ?? '').trim().toUpperCase();
   if (!secret) throw new Error('ANONYMOUS_ACCESS_INVALID');
-  const { data: access } = await admin.from('case_anonymous_access')
-    .select('secret_hash,failed_attempts,locked_until')
-    .eq('case_id', caseRow.id)
-    .single();
-  if (!access) throw new Error('ANONYMOUS_ACCESS_INVALID');
-  if (access.locked_until && Date.parse(access.locked_until) > Date.now()) throw new Error('ANONYMOUS_LOCKED');
   const hashed = await sha256Base64(secret);
-  const valid = timingSafeEqual(new TextEncoder().encode(hashed), new TextEncoder().encode(access.secret_hash));
-  if (!valid) {
-    const failed = Number(access.failed_attempts ?? 0) + 1;
-    const lockedUntil = failed >= 5 ? new Date(Date.now() + 15 * 60_000).toISOString() : null;
-    await admin.from('case_anonymous_access').update({ failed_attempts: failed >= 5 ? 0 : failed, locked_until: lockedUntil }).eq('case_id', caseRow.id);
-    throw new Error('ANONYMOUS_ACCESS_INVALID');
-  }
-  await admin.from('case_anonymous_access').update({ failed_attempts: 0, locked_until: null, last_used_at: new Date().toISOString() }).eq('case_id', caseRow.id);
+  const { data, error } = await admin.rpc('verify_anonymous_access_atomic',{p_case_id:caseRow.id,p_supplied_hash:hashed});
+  if(error||!data?.ok){if(data?.code==='LOCKED')throw new Error('ANONYMOUS_LOCKED');throw new Error('ANONYMOUS_ACCESS_INVALID');}
 }
 
 async function activeInternalAccess(userId: string, caseRow: CaseRow) {
