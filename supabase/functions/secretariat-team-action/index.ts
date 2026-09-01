@@ -1,25 +1,153 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2.112.4';
-const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST, OPTIONS'};
+
+const cors={
+  'Access-Control-Allow-Origin':'*',
+  'Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods':'POST, OPTIONS',
+};
 const admin=createClient(Deno.env.get('SUPABASE_URL')??'',Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')??'',{auth:{persistSession:false,autoRefreshToken:false}});
 const json=(b:unknown,s=200)=>new Response(JSON.stringify(b),{status:s,headers:{...cors,'Content-Type':'application/json; charset=utf-8'}});
-async function user(req:Request){const t=(req.headers.get('Authorization')??'').replace(/^Bearer\s+/i,'');if(!t)throw new Error('UNAUTHENTICATED');const{data,error}=await admin.auth.getUser(t);if(error||!data.user)throw new Error('UNAUTHENTICATED');return data.user;}
-async function org(uid:string){const n=new Date().toISOString();const{data,error}=await admin.from('user_system_roles').select('organization_id,active_from,active_until').eq('user_id',uid).eq('role_code','SECRETARIAT').lte('active_from',n);if(error)throw error;const r=(data??[]).find(x=>!x.active_until||x.active_until>n);if(!r)throw new Error('FORBIDDEN');return r.organization_id as string;}
-async function hasActiveRole(uid:string,oid:string,roleCode:string){const n=new Date().toISOString();const{data,error}=await admin.from('user_system_roles').select('active_from,active_until').eq('user_id',uid).eq('organization_id',oid).eq('role_code',roleCode).lte('active_from',n);if(error)throw error;return(data??[]).some(x=>!x.active_until||x.active_until>n);}
-async function kase(id:string,oid:string){const{data,error}=await admin.from('cases').select('id,public_case_id,reporting_mode,status,classification,authority_code,submitted_at,updated_at,closed_at,is_test_data,test_label').eq('id',id).eq('organization_id',oid).eq('authority_code','SECRETARIAT').single();if(error||!data)throw new Error('CASE_NOT_FOUND');return data;}
-function followupState(row:any){if(row.status==='COMPLETED'||row.status==='CANCELLED')return row.status;const due=new Date(row.due_at).getTime(),now=Date.now();if(due<now)return'OVERDUE';if(due<=now+3*86400000)return'DUE_SOON';return'UPCOMING';}
-Deno.serve(async(req)=>{if(req.method==='OPTIONS')return new Response('ok',{headers:cors});if(req.method!=='POST')return json({error:'Metode tidak diizinkan.'},405);try{const u=await user(req),oid=await org(u.id),b=await req.json().catch(()=>({})),action=String(b.action??'LIST'),requestedUat=b.uat===true,allowUat=requestedUat&&await hasActiveRole(u.id,oid,'SYSTEM_ADMIN');if(requestedUat&&!allowUat)return json({error:'Mode UAT hanya tersedia untuk SYSTEM_ADMIN aktif.'},403);
-if(action==='LIST'){let q=admin.from('cases').select('id,public_case_id,reporting_mode,status,classification,authority_code,submitted_at,is_test_data,test_label').eq('organization_id',oid).eq('authority_code','SECRETARIAT').neq('status','CLOSED').neq('status','OUT_OF_SCOPE');if(!allowUat)q=q.eq('is_test_data',false);const{data,error}=await q.order('submitted_at',{ascending:false});if(error)throw error;const ids=(data??[]).map(x=>x.id);const{data:reports}=ids.length?await admin.from('case_reports').select('case_id,title').in('case_id',ids):{data:[]} as any;const m=new Map((reports??[]).map((r:any)=>[r.case_id,r.title]));return json({cases:(data??[]).map(c=>({...c,title:m.get(c.id)??c.public_case_id})),uat:allowUat});}
-if(action==='LIST_FOLLOWUPS'){let cq=admin.from('cases').select('id,public_case_id,classification,reporting_mode,closed_at,is_test_data,test_label').eq('organization_id',oid).eq('authority_code','SECRETARIAT').eq('status','CLOSED');if(!allowUat)cq=cq.eq('is_test_data',false);const{data:closed,error:ce}=await cq.order('closed_at',{ascending:false});if(ce)throw ce;const ids=(closed??[]).map(x=>x.id);if(!ids.length)return json({followups:[],counts:{upcoming:0,dueSoon:0,overdue:0,openEscalations:0}});const[{data:fu,error:fe},{data:reports}]=await Promise.all([admin.from('case_followups').select('id,case_id,closure_id,day_offset,due_at,status,check_method,outcome,risk_level,notes,completed_at,escalation_required,escalation_note,escalation_status,escalation_resolution_note,escalation_resolved_at,escalation_resolution_mode,linked_case_id').in('case_id',ids).order('due_at'),admin.from('case_reports').select('case_id,title').in('case_id',ids)]);if(fe)throw fe;const linkedIds=[...new Set((fu??[]).map((x:any)=>x.linked_case_id).filter(Boolean))];const{data:linkedCases}=linkedIds.length?await admin.from('cases').select('id,public_case_id,status,authority_code').in('id',linkedIds):{data:[]} as any;const cm=new Map((closed??[]).map((c:any)=>[c.id,c])),tm=new Map((reports??[]).map((r:any)=>[r.case_id,r.title])),lm=new Map((linkedCases??[]).map((c:any)=>[c.id,c]));const rows=(fu??[]).map((f:any)=>{const c=cm.get(f.case_id),linked=f.linked_case_id?lm.get(f.linked_case_id):null;return{...f,effective_status:followupState(f),public_case_id:c.public_case_id,classification:c.classification,reporting_mode:c.reporting_mode,closed_at:c.closed_at,title:tm.get(f.case_id)??c.public_case_id,linked_case:linked??null};});return json({followups:rows,counts:{upcoming:rows.filter((x:any)=>x.effective_status==='UPCOMING').length,dueSoon:rows.filter((x:any)=>x.effective_status==='DUE_SOON').length,overdue:rows.filter((x:any)=>x.effective_status==='OVERDUE').length,openEscalations:rows.filter((x:any)=>x.escalation_status==='OPEN').length}});}
-const caseId=String(b.caseId??'');if(!caseId)return json({error:'Case ID wajib.'},400);const c=await kase(caseId,oid);if(c.is_test_data&&!allowUat)return json({error:'Laporan tidak ditemukan.'},404);
-if(action==='DETAIL'){const q=await Promise.all([admin.from('case_reports').select('*').eq('case_id',caseId).single(),admin.from('case_messages').select('id,sender_type,body,visible_to_reporter,created_at').eq('case_id',caseId).order('created_at'),admin.from('case_team_members').select('id,email,display_name,member_category,committee_role,nomination_status,linked_user_id,nominated_at,declaration_at').eq('case_id',caseId).neq('nomination_status','REVOKED').order('nominated_at'),admin.from('case_assignments').select('user_id,assignment_role,access_status').eq('case_id',caseId),admin.from('case_allegations').select('id,sequence_no,statement,status').eq('case_id',caseId).eq('status','ACTIVE').order('sequence_no'),admin.from('case_findings').select('id,allegation_id,finding_status,analysis_text,recommendation_text,updated_at').eq('case_id',caseId),admin.from('case_authority_reviews').select('id,decision,review_notes,created_at').eq('case_id',caseId).order('created_at',{ascending:false}),admin.from('case_remediation_actions').select('id,action_text,owner_text,due_date,status,completion_note,created_at,updated_at,completed_at').eq('case_id',caseId).order('created_at')]);const[report,messages,team,assignments,allegations,findings,reviews,remediation]=q.map(x=>x.data);const amap=new Map((assignments??[]).map((a:any)=>[`${a.user_id}|${a.assignment_role}`,a.access_status]));return json({case:c,report,messages:messages??[],team:(team??[]).map((m:any)=>({...m,assignment_status:m.linked_user_id?(amap.get(`${m.linked_user_id}|${m.committee_role}`)??null):null})),allegations:allegations??[],findings:findings??[],reviews:reviews??[],remediation:remediation??[]});}
-if(action==='COMPLETE_FOLLOWUP'){if(c.status!=='CLOSED')return json({error:'Follow-up hanya berlaku untuk kasus yang sudah ditutup.'},409);const id=String(b.followupId??''),method=String(b.checkMethod??''),outcome=String(b.outcome??''),risk=String(b.riskLevel??''),notes=String(b.notes??'').trim(),esc=String(b.escalationNote??'').trim();if(!id)return json({error:'Jadwal follow-up wajib dipilih.'},400);const{data,error}=await admin.rpc('complete_case_followup',{p_followup_id:id,p_actor_user_id:u.id,p_organization_id:oid,p_check_method:method,p_outcome:outcome,p_risk_level:risk,p_notes:notes,p_escalation_note:esc||null});if(error){const m=error.message||'';if(m.includes('FOLLOWUP_ALREADY_COMPLETED'))return json({error:'Follow-up ini sudah diproses.'},409);if(m.includes('ESCALATION_NOTE_REQUIRED'))return json({error:'Temuan ini memerlukan catatan eskalasi.'},400);if(m.includes('NOTES_REQUIRED'))return json({error:'Catatan follow-up wajib 5–5.000 karakter.'},400);if(m.includes('CASE_NOT_CLOSED'))return json({error:'Kasus tidak lagi berada dalam status tertutup.'},409);throw error;}return json(data);}
-if(action==='RESOLVE_FOLLOWUP_ESCALATION'){if(c.status!=='CLOSED')return json({error:'Eskalasi follow-up hanya berlaku untuk kasus yang sudah ditutup.'},409);const id=String(b.followupId??''),note=String(b.resolutionNote??'').trim();const{data,error}=await admin.rpc('resolve_case_followup_escalation',{p_followup_id:id,p_actor_user_id:u.id,p_organization_id:oid,p_resolution_note:note});if(error){const m=error.message||'';if(m.includes('LINKED_CASE_REQUIRED'))return json({error:'Eskalasi retaliation tidak dapat ditutup sebelum linked case dibuat.'},409);if(m.includes('ESCALATION_NOT_OPEN'))return json({error:'Eskalasi terbuka tidak ditemukan.'},404);if(m.includes('RESOLUTION_REQUIRED'))return json({error:'Catatan penyelesaian eskalasi wajib 5–5.000 karakter.'},400);throw error;}return json(data);}
-if(action==='REVIEW_FINDINGS'){if(c.status!=='AUTHORITY_REVIEW')return json({error:'Hasil pemeriksaan belum berada pada tahap review Sekretariat.'},409);const decision=String(b.decision??''),notes=String(b.reviewNotes??'').trim();if(!['APPROVED','RETURNED_FOR_REVISION'].includes(decision)||notes.length<5)return json({error:'Keputusan dan catatan review wajib diisi.'},400);const[{data:a},{data:f}]=await Promise.all([admin.from('case_allegations').select('id').eq('case_id',caseId).eq('status','ACTIVE'),admin.from('case_findings').select('allegation_id').eq('case_id',caseId)]);const done=new Set((f??[]).map(x=>x.allegation_id));if(!(a??[]).length||(a??[]).some(x=>!done.has(x.id)))return json({error:'Finding per dugaan belum lengkap.'},409);const{data:r,error}=await admin.from('case_authority_reviews').insert({case_id:caseId,reviewer_user_id:u.id,decision,review_notes:notes}).select('id').single();if(error)throw error;const next=decision==='APPROVED'?'REMEDIATION':'INVESTIGATION';await admin.from('cases').update({status:next,updated_at:new Date().toISOString()}).eq('id',caseId);await admin.from('audit_logs').insert({organization_id:oid,case_id:caseId,actor_user_id:u.id,event_type:decision==='APPROVED'?'FINDINGS_APPROVED':'FINDINGS_RETURNED_FOR_REVISION',object_type:'case_authority_review',object_id:r.id,details:{next_status:next}});return json({ok:true,status:next});}
-if(action==='ADD_REMEDIATION_ACTION'){if(c.status!=='REMEDIATION')return json({error:'Action item hanya dapat ditambah pada tahap Tindak Lanjut.'},409);const text=String(b.actionText??'').trim(),owner=String(b.ownerText??'').trim().slice(0,240)||null,due=String(b.dueDate??'').trim()||null;if(text.length<5||text.length>5000)return json({error:'Tindak lanjut harus 5–5.000 karakter.'},400);if(due&&!/^\d{4}-\d{2}-\d{2}$/.test(due))return json({error:'Tanggal target tidak valid.'},400);const{data:r,error}=await admin.from('case_remediation_actions').insert({case_id:caseId,action_text:text,owner_text:owner,due_date:due,created_by:u.id}).select('id').single();if(error)throw error;await admin.from('audit_logs').insert({organization_id:oid,case_id:caseId,actor_user_id:u.id,event_type:'REMEDIATION_ACTION_ADDED',object_type:'case_remediation_action',object_id:r.id,details:{}});return json({ok:true});}
-if(action==='COMPLETE_REMEDIATION_ACTION'||action==='WAIVE_REMEDIATION_ACTION'){if(c.status!=='REMEDIATION')return json({error:'Tindak lanjut tidak sedang aktif.'},409);const id=String(b.remediationId??''),note=String(b.completionNote??'').trim();if(note.length<5||note.length>5000)return json({error:'Catatan penyelesaian/alasan waiver wajib 5–5.000 karakter.'},400);const status=action==='COMPLETE_REMEDIATION_ACTION'?'COMPLETED':'WAIVED',now=new Date().toISOString();const{data:r,error}=await admin.from('case_remediation_actions').update({status,completion_note:note,completed_by:u.id,completed_at:now,updated_at:now}).eq('id',id).eq('case_id',caseId).not('status','in','(COMPLETED,WAIVED)').select('id').maybeSingle();if(error)throw error;if(!r)return json({error:'Action item tidak ditemukan atau sudah selesai.'},404);await admin.from('audit_logs').insert({organization_id:oid,case_id:caseId,actor_user_id:u.id,event_type:status==='COMPLETED'?'REMEDIATION_ACTION_COMPLETED':'REMEDIATION_ACTION_WAIVED',object_type:'case_remediation_action',object_id:id,details:{}});return json({ok:true});}
-if(action==='CLOSE_CASE'){if(c.status!=='REMEDIATION')return json({error:'Kasus hanya dapat ditutup pada tahap Tindak Lanjut.'},409);const internal=String(b.internalSummary??'').trim(),reporter=String(b.reporterSummary??'').trim();if(internal.length<5||reporter.length<5)return json({error:'Ringkasan internal dan ringkasan untuk pelapor wajib diisi.'},400);const{data,error}=await admin.rpc('close_case_remediation',{p_case_id:caseId,p_actor_user_id:u.id,p_organization_id:oid,p_internal_summary:internal,p_reporter_summary:reporter});if(error){const m=error.message||'';if(m.includes('PENDING_REMEDIATION'))return json({error:'Masih ada tindak lanjut yang belum diselesaikan atau di-waive.'},409);if(m.includes('INCOMPLETE_FINDINGS'))return json({error:'Finding final belum lengkap.'},409);throw error;}return json(data);}
-if(c.status!=='COMMITTEE_FORMATION')return json({error:'Pembentukan tim hanya dapat diubah saat status Menunggu Pembentukan Tim.'},409);
-if(action==='ADD_MEMBER'){const email=String(b.email??'').trim().toLowerCase(),name=String(b.displayName??'').trim().slice(0,200)||null,cat=String(b.memberCategory??''),role=String(b.committeeRole??''),rationale=String(b.rationale??'').trim(),context=String(b.conflictContext??'').trim();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!['DS','MANAGEMENT','STAFF','OTS','EXTERNAL'].includes(cat)||!['CASE_LEAD','INVESTIGATOR','SUBJECT_MATTER_ADVISER'].includes(role)||rationale.length<5||context.length<3)return json({error:'Data kandidat belum lengkap/valid.'},400);const{data:r,error}=await admin.from('case_team_members').insert({case_id:caseId,email,display_name:name,member_category:cat,committee_role:role,rationale,conflict_context:context,nomination_status:'PENDING_ACCOUNT',nominated_by:u.id}).select('id').single();if(error){if((error as any).code==='23505')return json({error:'Email ini sudah menjadi kandidat aktif pada laporan ini.'},409);throw error;}await admin.from('audit_logs').insert({organization_id:oid,case_id:caseId,actor_user_id:u.id,event_type:'TEAM_MEMBER_NOMINATED',object_type:'case_team_member',object_id:r.id,details:{committee_role:role}});return json({ok:true});}
-if(action==='REVOKE_MEMBER'){const id=String(b.memberId??''),now=new Date().toISOString();const{data:m}=await admin.from('case_team_members').select('linked_user_id').eq('id',id).eq('case_id',caseId).single();if(!m)return json({error:'Kandidat tidak ditemukan.'},404);await admin.from('case_team_members').update({nomination_status:'REVOKED',revoked_at:now,updated_at:now}).eq('id',id);if(m.linked_user_id)await admin.from('case_assignments').update({access_status:'REVOKED',revoked_at:now}).eq('case_id',caseId).eq('user_id',m.linked_user_id);return json({ok:true});}
-if(action==='ACTIVATE_TEAM'){const{data:t}=await admin.from('case_team_members').select('linked_user_id,committee_role').eq('case_id',caseId).eq('nomination_status','CLEARED');const inv=(t??[]).filter(x=>x.linked_user_id&&['CASE_LEAD','INVESTIGATOR'].includes(x.committee_role)),users=[...new Set(inv.map(x=>x.linked_user_id))];if(users.length<2)return json({error:'Tim Pemeriksa membutuhkan minimum 2 orang berbeda yang telah lolos deklarasi benturan kepentingan.'},409);if(!inv.some(x=>x.committee_role==='CASE_LEAD'))return json({error:'Tim Pemeriksa harus memiliki minimal satu Ketua Tim.'},409);await admin.from('case_assignments').update({access_status:'ACTIVE',revoked_at:null}).eq('case_id',caseId).in('user_id',users);await admin.from('cases').update({status:'INVESTIGATION',updated_at:new Date().toISOString()}).eq('id',caseId);return json({ok:true,investigatorCount:users.length});}
-return json({error:'Aksi tidak dikenali.'},400);}catch(e){console.error(e);const c=e instanceof Error?e.message:'';if(c==='UNAUTHENTICATED')return json({error:'Silakan masuk terlebih dahulu.'},401);if(c==='FORBIDDEN')return json({error:'Akun ini tidak memiliki kewenangan Sekretariat DS.'},403);if(c==='CASE_NOT_FOUND')return json({error:'Laporan tidak ditemukan.'},404);return json({error:'Aksi Sekretariat belum dapat diproses.'},400);}});
+const RETIRED_MUTATIONS=new Set(['ADD_MEMBER','REVOKE_MEMBER','ACTIVATE_TEAM','REVIEW_FINDINGS','ADD_REMEDIATION_ACTION','COMPLETE_REMEDIATION_ACTION','WAIVE_REMEDIATION_ACTION']);
+
+async function currentUser(req:Request){
+  const token=(req.headers.get('Authorization')??'').replace(/^Bearer\s+/i,'');
+  if(!token)throw new Error('UNAUTHENTICATED');
+  const{data,error}=await admin.auth.getUser(token);
+  if(error||!data.user)throw new Error('UNAUTHENTICATED');
+  return data.user;
+}
+async function secretariatOrg(uid:string){
+  const now=new Date().toISOString();
+  const{data,error}=await admin.from('user_system_roles').select('organization_id,active_from,active_until').eq('user_id',uid).eq('role_code','SECRETARIAT').lte('active_from',now);
+  if(error)throw error;
+  const role=(data??[]).find((x)=>!x.active_until||x.active_until>now);
+  if(!role)throw new Error('FORBIDDEN');
+  return String(role.organization_id);
+}
+async function hasActiveRole(uid:string,orgId:string,roleCode:string){
+  const now=new Date().toISOString();
+  const{data,error}=await admin.from('user_system_roles').select('active_until').eq('user_id',uid).eq('organization_id',orgId).eq('role_code',roleCode).lte('active_from',now);
+  if(error)throw error;
+  return(data??[]).some((x)=>!x.active_until||x.active_until>now);
+}
+async function getCase(id:string,orgId:string){
+  const{data,error}=await admin.from('cases').select('id,public_case_id,reporting_mode,status,classification,authority_code,submitted_at,updated_at,closed_at,is_test_data,test_label').eq('id',id).eq('organization_id',orgId).eq('authority_code','SECRETARIAT').maybeSingle();
+  if(error)throw error;
+  if(!data)throw new Error('CASE_NOT_FOUND');
+  return data;
+}
+function followupState(row:any){
+  if(row.status==='COMPLETED'||row.status==='CANCELLED')return row.status;
+  const due=new Date(row.due_at).getTime(),now=Date.now();
+  if(due<now)return'OVERDUE';
+  if(due<=now+3*86400000)return'DUE_SOON';
+  return'UPCOMING';
+}
+
+Deno.serve(async(req:Request)=>{
+  if(req.method==='OPTIONS')return new Response('ok',{headers:cors});
+  if(req.method!=='POST')return json({error:'Metode tidak diizinkan.'},405);
+  try{
+    const u=await currentUser(req);
+    const orgId=await secretariatOrg(u.id);
+    const body=await req.json().catch(()=>({}));
+    const action=String(body.action??'LIST').toUpperCase();
+    const requestedUat=body.uat===true;
+    const allowUat=requestedUat&&await hasActiveRole(u.id,orgId,'SYSTEM_ADMIN');
+    if(requestedUat&&!allowUat)return json({error:'Mode UAT hanya tersedia untuk SYSTEM_ADMIN aktif.'},403);
+
+    if(RETIRED_MUTATIONS.has(action))return json({error:'Workflow ini sudah diperbarui. Muat ulang halaman untuk menggunakan jalur transaksi terbaru.'},409);
+
+    if(action==='LIST'){
+      let q=admin.from('cases').select('id,public_case_id,reporting_mode,status,classification,authority_code,submitted_at,is_test_data,test_label').eq('organization_id',orgId).eq('authority_code','SECRETARIAT').neq('status','CLOSED').neq('status','OUT_OF_SCOPE');
+      if(!allowUat)q=q.eq('is_test_data',false);
+      const{data,error}=await q.order('submitted_at',{ascending:false});
+      if(error)throw error;
+      const ids=(data??[]).map((x)=>x.id);
+      const{data:reports,error:reportError}=ids.length?await admin.from('case_reports').select('case_id,title').in('case_id',ids):{data:[],error:null} as any;
+      if(reportError)throw reportError;
+      const titles=new Map((reports??[]).map((r:any)=>[r.case_id,r.title]));
+      return json({cases:(data??[]).map((c)=>({...c,title:titles.get(c.id)??c.public_case_id})),uat:allowUat});
+    }
+
+    if(action==='LIST_FOLLOWUPS'){
+      let cq=admin.from('cases').select('id,public_case_id,classification,reporting_mode,closed_at,is_test_data,test_label').eq('organization_id',orgId).eq('authority_code','SECRETARIAT').eq('status','CLOSED');
+      if(!allowUat)cq=cq.eq('is_test_data',false);
+      const{data:closed,error:closedError}=await cq.order('closed_at',{ascending:false});
+      if(closedError)throw closedError;
+      const ids=(closed??[]).map((x)=>x.id);
+      if(!ids.length)return json({followups:[],counts:{upcoming:0,dueSoon:0,overdue:0,openEscalations:0}});
+      const[{data:fu,error:followupError},{data:reports,error:reportError}]=await Promise.all([
+        admin.from('case_followups').select('id,case_id,closure_id,day_offset,due_at,status,check_method,outcome,risk_level,notes,completed_at,escalation_required,escalation_note,escalation_status,escalation_resolution_note,escalation_resolved_at,escalation_resolution_mode,linked_case_id').in('case_id',ids).order('due_at'),
+        admin.from('case_reports').select('case_id,title').in('case_id',ids),
+      ]);
+      if(followupError||reportError)throw followupError??reportError;
+      const linkedIds=[...new Set((fu??[]).map((x:any)=>x.linked_case_id).filter(Boolean))];
+      const{data:linkedCases,error:linkedError}=linkedIds.length?await admin.from('cases').select('id,public_case_id,status,authority_code').in('id',linkedIds):{data:[],error:null} as any;
+      if(linkedError)throw linkedError;
+      const caseMap=new Map((closed??[]).map((c:any)=>[c.id,c]));
+      const titleMap=new Map((reports??[]).map((r:any)=>[r.case_id,r.title]));
+      const linkedMap=new Map((linkedCases??[]).map((c:any)=>[c.id,c]));
+      const rows=(fu??[]).map((f:any)=>{const c=caseMap.get(f.case_id);return{...f,effective_status:followupState(f),public_case_id:c.public_case_id,classification:c.classification,reporting_mode:c.reporting_mode,closed_at:c.closed_at,title:titleMap.get(f.case_id)??c.public_case_id,linked_case:f.linked_case_id?(linkedMap.get(f.linked_case_id)??null):null};});
+      return json({followups:rows,counts:{upcoming:rows.filter((x:any)=>x.effective_status==='UPCOMING').length,dueSoon:rows.filter((x:any)=>x.effective_status==='DUE_SOON').length,overdue:rows.filter((x:any)=>x.effective_status==='OVERDUE').length,openEscalations:rows.filter((x:any)=>x.escalation_status==='OPEN').length}});
+    }
+
+    const caseId=String(body.caseId??'');
+    if(!caseId)return json({error:'Case ID wajib.'},400);
+    const c=await getCase(caseId,orgId);
+    if(c.is_test_data&&!allowUat)return json({error:'Laporan tidak ditemukan.'},404);
+
+    if(action==='DETAIL'){
+      const results=await Promise.all([
+        admin.from('case_reports').select('case_id,title,narrative,incident_date,incident_time_text,location_text,child_safety_risk,ongoing_risk,people_involved_text,submitted_at').eq('case_id',caseId).single(),
+        admin.from('case_messages').select('id,sender_type,body,visible_to_reporter,created_at').eq('case_id',caseId).order('created_at'),
+        admin.from('case_team_members').select('id,email,display_name,member_category,committee_role,nomination_status,linked_user_id,nominated_at,declaration_at').eq('case_id',caseId).neq('nomination_status','REVOKED').order('nominated_at'),
+        admin.from('case_assignments').select('user_id,assignment_role,access_status').eq('case_id',caseId),
+        admin.from('case_allegations').select('id,sequence_no,statement,status').eq('case_id',caseId).eq('status','ACTIVE').order('sequence_no'),
+        admin.from('case_findings').select('id,allegation_id,finding_status,analysis_text,recommendation_text,updated_at').eq('case_id',caseId),
+        admin.from('case_authority_reviews').select('id,decision,review_notes,created_at').eq('case_id',caseId).order('created_at',{ascending:false}),
+        admin.from('case_remediation_actions').select('id,action_text,owner_text,due_date,status,completion_note,created_at,updated_at,completed_at').eq('case_id',caseId).order('created_at'),
+      ]);
+      const firstError=results.find((x)=>x.error)?.error;
+      if(firstError)throw firstError;
+      const[report,messages,team,assignments,allegations,findings,reviews,remediation]=results.map((x)=>x.data);
+      const assignmentMap=new Map((assignments??[]).map((a:any)=>[`${a.user_id}|${a.assignment_role}`,a.access_status]));
+      return json({case:c,report,messages:messages??[],team:(team??[]).map((m:any)=>({...m,assignment_status:m.linked_user_id?(assignmentMap.get(`${m.linked_user_id}|${m.committee_role}`)??null):null})),allegations:allegations??[],findings:findings??[],reviews:reviews??[],remediation:remediation??[]});
+    }
+
+    if(action==='COMPLETE_FOLLOWUP'){
+      if(c.status!=='CLOSED')return json({error:'Follow-up hanya berlaku untuk kasus yang sudah ditutup.'},409);
+      const followupId=String(body.followupId??''),checkMethod=String(body.checkMethod??''),outcome=String(body.outcome??''),riskLevel=String(body.riskLevel??''),notes=String(body.notes??'').trim(),escalationNote=String(body.escalationNote??'').trim();
+      if(!followupId)return json({error:'Jadwal follow-up wajib dipilih.'},400);
+      const{data,error}=await admin.rpc('complete_case_followup',{p_followup_id:followupId,p_actor_user_id:u.id,p_organization_id:orgId,p_check_method:checkMethod,p_outcome:outcome,p_risk_level:riskLevel,p_notes:notes,p_escalation_note:escalationNote||null});
+      if(error){const m=error.message??'';if(m.includes('FOLLOWUP_ALREADY_COMPLETED'))return json({error:'Follow-up ini sudah diproses.'},409);if(m.includes('ESCALATION_NOTE_REQUIRED'))return json({error:'Temuan ini memerlukan catatan eskalasi.'},400);if(m.includes('NOTES_REQUIRED'))return json({error:'Catatan follow-up wajib 5–5.000 karakter.'},400);if(m.includes('CASE_NOT_CLOSED'))return json({error:'Kasus tidak lagi berada dalam status tertutup.'},409);throw error;}
+      return json(data);
+    }
+
+    if(action==='RESOLVE_FOLLOWUP_ESCALATION'){
+      if(c.status!=='CLOSED')return json({error:'Eskalasi follow-up hanya berlaku untuk kasus yang sudah ditutup.'},409);
+      const followupId=String(body.followupId??''),resolutionNote=String(body.resolutionNote??'').trim();
+      const{data,error}=await admin.rpc('resolve_case_followup_escalation',{p_followup_id:followupId,p_actor_user_id:u.id,p_organization_id:orgId,p_resolution_note:resolutionNote});
+      if(error){const m=error.message??'';if(m.includes('LINKED_CASE_REQUIRED'))return json({error:'Eskalasi retaliation tidak dapat ditutup sebelum linked case dibuat.'},409);if(m.includes('ESCALATION_NOT_OPEN'))return json({error:'Eskalasi terbuka tidak ditemukan.'},404);if(m.includes('RESOLUTION_REQUIRED'))return json({error:'Catatan penyelesaian eskalasi wajib 5–5.000 karakter.'},400);throw error;}
+      return json(data);
+    }
+
+    if(action==='CLOSE_CASE'){
+      if(c.status!=='REMEDIATION')return json({error:'Kasus hanya dapat ditutup pada tahap Tindak Lanjut.'},409);
+      const internalSummary=String(body.internalSummary??'').trim(),reporterSummary=String(body.reporterSummary??'').trim();
+      if(internalSummary.length<5||reporterSummary.length<5)return json({error:'Ringkasan internal dan ringkasan untuk pelapor wajib diisi.'},400);
+      const{data,error}=await admin.rpc('close_case_remediation',{p_case_id:caseId,p_actor_user_id:u.id,p_organization_id:orgId,p_internal_summary:internalSummary,p_reporter_summary:reporterSummary});
+      if(error){const m=error.message??'';if(m.includes('PENDING_REMEDIATION'))return json({error:'Masih ada tindak lanjut yang belum diselesaikan atau di-waive.'},409);if(m.includes('INCOMPLETE_FINDINGS'))return json({error:'Finding final belum lengkap.'},409);throw error;}
+      return json(data);
+    }
+
+    return json({error:'Aksi tidak dikenali.'},400);
+  }catch(e){
+    console.error('secretariat-team-action',e);
+    const code=e instanceof Error?e.message:'';
+    if(code==='UNAUTHENTICATED')return json({error:'Silakan masuk terlebih dahulu.'},401);
+    if(code==='FORBIDDEN')return json({error:'Akun ini tidak memiliki kewenangan Sekretariat DS.'},403);
+    if(code==='CASE_NOT_FOUND')return json({error:'Laporan tidak ditemukan.'},404);
+    return json({error:'Aksi Sekretariat belum dapat diproses.'},400);
+  }
+});
