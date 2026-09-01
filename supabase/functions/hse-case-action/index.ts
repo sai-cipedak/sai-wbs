@@ -80,39 +80,26 @@ Deno.serve(async(req:Request)=>{
     }
 
     if(action==='ASSESS_RISK'){
-      if(c.status!=='REFERRED_SAFEGUARDING'||c.classification!=='SAFEGUARDING')return json({error:'Initial safeguarding assessment hanya dapat dilakukan setelah case dirujuk ke HSE.'},409);
-      const{data:existing}=await admin.from('case_safeguarding_assessments').select('id').eq('case_id',caseId).limit(1).maybeSingle();
-      if(existing)return json({error:'Initial safeguarding assessment sudah tercatat.'},409);
       const immediateDanger=body.immediateDanger===true;
       const riskSummary=text(body.riskSummary,10,5000);if(!riskSummary)return json({error:'Ringkasan assessment wajib 10–5.000 karakter.'},400);
-      const now=new Date().toISOString();
-      const{data:a,error}=await admin.from('case_safeguarding_assessments').insert({case_id:caseId,assessed_by:user.id,immediate_danger:immediateDanger,risk_summary:riskSummary,assessed_at:now}).select('id').single();if(error)throw error;
-      if(!immediateDanger)await admin.from('cases').update({status:'COMMITTEE_FORMATION',updated_at:now}).eq('id',caseId).eq('status','REFERRED_SAFEGUARDING');
-      await admin.from('audit_logs').insert({organization_id:orgId,case_id:caseId,actor_user_id:user.id,event_type:'SAFEGUARDING_RISK_ASSESSED',object_type:'case_safeguarding_assessment',object_id:a.id,details:{immediate_danger:immediateDanger,next_status:immediateDanger?'REFERRED_SAFEGUARDING':'COMMITTEE_FORMATION'}});
-      if(!immediateDanger)await admin.from('audit_logs').insert({organization_id:orgId,case_id:caseId,actor_user_id:user.id,event_type:'SAFEGUARDING_FAST_LANE_CLEARED',object_type:'case',object_id:caseId,details:{reason:'NO_IMMEDIATE_DANGER'}});
-      return json({ok:true,immediateDanger,status:immediateDanger?'REFERRED_SAFEGUARDING':'COMMITTEE_FORMATION',protectiveActionRequired:immediateDanger});
+      const{data,error}=await admin.rpc('hse_assess_risk_atomic',{p_case_id:caseId,p_actor_user_id:user.id,p_organization_id:orgId,p_immediate_danger:immediateDanger,p_risk_summary:riskSummary});
+      if(error){const m=String(error.message??'');if(m.includes('ASSESSMENT_ALREADY_EXISTS'))return json({error:'Initial safeguarding assessment sudah tercatat.'},409);if(m.includes('FAST_LANE_NOT_ACTIVE'))return json({error:'Initial safeguarding assessment hanya dapat dilakukan setelah case dirujuk ke HSE.'},409);if(m.includes('RISK_SUMMARY_REQUIRED'))return json({error:'Ringkasan assessment wajib 10–5.000 karakter.'},400);if(m.includes('CASE_NOT_FOUND'))return json({error:'Case safeguarding tidak ditemukan.'},404);throw error;}
+      return json(data);
     }
 
     if(action==='RECORD_PROTECTIVE_ACTION'){
-      if(c.status!=='REFERRED_SAFEGUARDING'||c.classification!=='SAFEGUARDING')return json({error:'Protective action gate tidak sedang aktif untuk case ini.'},409);
-      const{data:a}=await admin.from('case_safeguarding_assessments').select('id,immediate_danger,assessed_at').eq('case_id',caseId).order('assessed_at',{ascending:false}).limit(1).maybeSingle();
-      if(!a?.immediate_danger)return json({error:'Assessment immediate danger belum tercatat.'},409);
       const actionText=text(body.actionText,10,5000);if(!actionText)return json({error:'Protective action wajib 10–5.000 karakter.'},400);
-      const ownerText=text(body.ownerText,0,240);const now=new Date().toISOString();
-      const{data:p,error}=await admin.from('case_protective_actions').insert({case_id:caseId,assessment_id:a.id,action_text:actionText,owner_text:ownerText,initiated_by:user.id,initiated_at:now,status:'ACTIVE'}).select('id,initiated_at').single();if(error)throw error;
-      const sameDay=jakartaDate(c.submitted_at)===jakartaDate(now);
-      await admin.from('cases').update({status:'COMMITTEE_FORMATION',updated_at:now}).eq('id',caseId).eq('status','REFERRED_SAFEGUARDING');
-      await admin.from('audit_logs').insert({organization_id:orgId,case_id:caseId,actor_user_id:user.id,event_type:'PROTECTIVE_ACTION_INITIATED',object_type:'case_protective_action',object_id:p.id,details:{same_day_sla_met:sameDay,owner:ownerText}});
-      await admin.from('audit_logs').insert({organization_id:orgId,case_id:caseId,actor_user_id:user.id,event_type:'SAFEGUARDING_PROTECTIVE_GATE_CLEARED',object_type:'case',object_id:caseId,details:{protective_action_id:p.id,same_day_sla_met:sameDay,next_status:'COMMITTEE_FORMATION'}});
-      return json({ok:true,status:'COMMITTEE_FORMATION',sameDaySlaMet:sameDay});
+      const ownerText=text(body.ownerText,0,240);
+      const{data,error}=await admin.rpc('hse_record_protective_action_atomic',{p_case_id:caseId,p_actor_user_id:user.id,p_organization_id:orgId,p_action_text:actionText,p_owner_text:ownerText});
+      if(error){const m=String(error.message??'');if(m.includes('PROTECTIVE_GATE_NOT_ACTIVE'))return json({error:'Protective action gate tidak sedang aktif untuk case ini.'},409);if(m.includes('IMMEDIATE_DANGER_NOT_ASSESSED'))return json({error:'Assessment immediate danger belum tercatat.'},409);if(m.includes('PROTECTIVE_ACTION_REQUIRED'))return json({error:'Protective action wajib 10–5.000 karakter.'},400);if(m.includes('CASE_NOT_FOUND'))return json({error:'Case safeguarding tidak ditemukan.'},404);throw error;}
+      return json(data);
     }
 
     if(action==='COMPLETE_PROTECTIVE_ACTION'){
       const id=String(body.protectiveActionId??''),note=text(body.completionNote,5,5000);if(!id||!note)return json({error:'Protective action dan catatan penyelesaian wajib diisi.'},400);
-      const now=new Date().toISOString();
-      const{data:p,error}=await admin.from('case_protective_actions').update({status:'COMPLETED',completion_note:note,completed_by:user.id,completed_at:now,updated_at:now}).eq('id',id).eq('case_id',caseId).eq('status','ACTIVE').select('id').maybeSingle();if(error)throw error;if(!p)return json({error:'Protective action aktif tidak ditemukan.'},404);
-      await admin.from('audit_logs').insert({organization_id:orgId,case_id:caseId,actor_user_id:user.id,event_type:'PROTECTIVE_ACTION_COMPLETED',object_type:'case_protective_action',object_id:id,details:{}});
-      return json({ok:true});
+      const{data,error}=await admin.rpc('hse_complete_protective_action_atomic',{p_case_id:caseId,p_protective_action_id:id,p_actor_user_id:user.id,p_organization_id:orgId,p_completion_note:note});
+      if(error){const m=String(error.message??'');if(m.includes('PROTECTIVE_ACTION_NOT_FOUND'))return json({error:'Protective action aktif tidak ditemukan.'},404);if(m.includes('PROTECTIVE_ACTION_NOT_ACTIVE'))return json({error:'Protective action ini sudah tidak aktif.'},409);if(m.includes('COMPLETION_NOTE_REQUIRED'))return json({error:'Protective action dan catatan penyelesaian wajib diisi.'},400);if(m.includes('CASE_NOT_FOUND'))return json({error:'Case safeguarding tidak ditemukan.'},404);throw error;}
+      return json(data);
     }
 
     if(c.status!=='COMMITTEE_FORMATION')return json({error:'Pembentukan Tim Pemeriksa hanya dapat dilakukan setelah fast-lane gate selesai.'},409);
