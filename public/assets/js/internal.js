@@ -10,6 +10,7 @@ const pageMessage = document.querySelector('#pageMessage');
 let currentCases = [];
 let selectedCaseId = null;
 let allowUat = false;
+let actionPending = false;
 
 const STATUS_LABELS = {
   SUBMITTED: 'Laporan Diterima', UNDER_REVIEW: 'Sedang Ditelaah', MORE_INFO_REQUIRED: 'Informasi Tambahan Diperlukan',
@@ -17,6 +18,15 @@ const STATUS_LABELS = {
   INVESTIGATION: 'Pemeriksaan', AUTHORITY_REVIEW: 'Review Otoritas', REMEDIATION: 'Tindak Lanjut', CLOSED: 'Selesai', OUT_OF_SCOPE: 'Tidak Dilanjutkan',
 };
 const CLASS_LABELS = { INTEGRITY: 'Pelanggaran Integritas', SAFEGUARDING: 'Keselamatan & Perlindungan Anak', GRIEVANCE: 'Keluhan / Pengaduan Layanan', OUT_OF_SCOPE: 'Di Luar Ruang Lingkup' };
+const ACTION_SUCCESS_LABELS = {
+  START_REVIEW: 'Penelaahan awal dimulai',
+  REQUEST_INFO: 'Permintaan informasi dikirim',
+  ROUTE_INTEGRITY: 'Laporan dirujuk ke jalur Integritas',
+  ROUTE_SAFEGUARDING: 'Laporan dirujuk ke Otoritas Perlindungan',
+  ROUTE_GRIEVANCE: 'Laporan dirujuk ke Koordinator Pengaduan',
+  ROUTE_DEKOM: 'Laporan diambil alih oleh Dekom',
+  CLOSE_OUT_OF_SCOPE: 'Laporan ditutup sebagai di luar ruang lingkup',
+};
 
 function fmtDate(value) { return value ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—'; }
 function el(tag, text, className) { const node = document.createElement(tag); if (text != null) node.textContent = text; if (className) node.className = className; return node; }
@@ -147,14 +157,28 @@ function renderDetail(item, report, messages) {
 }
 
 async function runAction(action, caseId, payload) {
+  if (actionPending) return;
+  actionPending = true;
+  const controls = [...caseDetail.querySelectorAll('button, input, textarea, select')];
+  controls.forEach((control) => { control.disabled = true; });
   showMessage('Menyimpan perubahan...');
-  const { data, error } = await supabaseClient.functions.invoke('triage-case-action', { body: { action, caseId, includeTestData: allowUat, ...payload } });
-  if (error) {
-    let detail = error.message;
-    try { const context = await error.context?.json(); if (context?.error) detail = context.error; } catch (_) {}
-    showMessage(detail || 'Aksi belum dapat disimpan.', 'error'); return;
+  try {
+    const { data, error } = await supabaseClient.functions.invoke('triage-case-action', { body: { action, caseId, includeTestData: allowUat, ...payload } });
+    if (error) {
+      let detail = error.message;
+      try { const context = await error.context?.json(); if (context?.error) detail = context.error; } catch (_) {}
+      showMessage(detail || 'Aksi belum dapat disimpan.', 'error');
+      return;
+    }
+    const resultLabel = ACTION_SUCCESS_LABELS[action] ?? 'Perubahan';
+    window.alert(`${resultLabel} untuk ${data.nomorLaporan} berhasil diproses.\n\nDaftar case akan dimuat ulang setelah pesan ini ditutup.`);
+    await loadCases();
+  } catch (error) {
+    showMessage(error?.message || 'Aksi belum dapat disimpan.', 'error');
+  } finally {
+    actionPending = false;
+    controls.forEach((control) => { control.disabled = false; });
   }
-  showMessage(`Perubahan untuk ${data.nomorLaporan} berhasil disimpan.`); await loadCases();
 }
 
 document.querySelector('#googleLogin')?.addEventListener('click', async () => {
