@@ -11,11 +11,11 @@ export const supabaseClient = createClient(
   { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } },
 );
 
-export async function invokePublic(functionName, body) {
+export async function invokePublic(functionName, body, method = 'POST') {
   const response = await fetch(`${config.SUPABASE_URL}/functions/v1/${functionName}`, {
-    method: 'POST',
+    method,
     headers: { 'Content-Type': 'application/json', apikey: config.SUPABASE_PUBLISHABLE_KEY },
-    body: JSON.stringify(body),
+    body: method === 'GET' ? undefined : JSON.stringify(body),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || 'Permintaan belum dapat diproses.');

@@ -9,7 +9,7 @@ function setValue(name, value) {
 }
 
 try {
-  const data = await invokePublic('public-case-stats', {});
+  const data = await invokePublic('public-case-stats', undefined, 'GET');
   for (const key of ['total', 'received', 'review', 'handling', 'closed']) setValue(key, data[key]);
   if (message) {
     message.textContent = 'Statistik agregat laporan production. Data UAT dan detail laporan tidak disertakan.';
@@ -19,4 +19,3 @@ try {
   if (stats) stats.hidden = true;
   console.warn('Statistik portal belum dapat dimuat.', error);
 }
-
