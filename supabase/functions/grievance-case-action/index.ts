@@ -27,8 +27,14 @@ async function orgFor(uid:string){
   }
   throw new Error('FORBIDDEN');
 }
-async function getCase(id:string,orgId:string){
-  const{data,error}=await admin.from('cases').select('id,public_case_id,status,classification,authority_code,reporting_mode,priority,submitted_at,updated_at,is_test_data').eq('id',id).eq('organization_id',orgId).eq('authority_code','GRIEVANCE').eq('classification','GRIEVANCE').maybeSingle();
+async function hasRole(uid:string,orgId:string,role:string){
+  const now=new Date().toISOString();
+  const{data,error}=await admin.from('user_system_roles').select('user_id').eq('user_id',uid).eq('organization_id',orgId).eq('role_code',role).lte('active_from',now).or(`active_until.is.null,active_until.gt.${now}`).limit(1);
+  if(error)throw error;
+  return (data??[]).length>0;
+}
+async function getCase(id:string,orgId:string,includeTestData:boolean){
+  const{data,error}=await admin.from('cases').select('id,public_case_id,status,classification,authority_code,reporting_mode,priority,submitted_at,updated_at,is_test_data').eq('id',id).eq('organization_id',orgId).eq('authority_code','GRIEVANCE').eq('classification','GRIEVANCE').eq('is_test_data',includeTestData).maybeSingle();
   if(error)throw error;
   if(!data)throw new Error('CASE_NOT_FOUND');
   return data;
@@ -42,20 +48,22 @@ Deno.serve(async(req:Request)=>{
     const orgId=await orgFor(user.id);
     const body=await req.json().catch(()=>({}));
     const action=String(body.action??'LIST').toUpperCase();
+    const includeTestData=body.includeTestData===true;
+    if(includeTestData&&!(await hasRole(user.id,orgId,'SYSTEM_ADMIN')))return json({error:'Mode UAT hanya tersedia untuk SYSTEM_ADMIN yang juga memiliki role Koordinator Pengaduan.'},403);
 
     if(action==='LIST'){
-      const{data:cases,error}=await admin.from('cases').select('id,public_case_id,status,classification,priority,reporting_mode,submitted_at,updated_at').eq('organization_id',orgId).eq('authority_code','GRIEVANCE').eq('classification','GRIEVANCE').eq('is_test_data',false).neq('status','CLOSED').neq('status','OUT_OF_SCOPE').order('updated_at',{ascending:false});
+      const{data:cases,error}=await admin.from('cases').select('id,public_case_id,status,classification,priority,reporting_mode,submitted_at,updated_at,is_test_data,test_label').eq('organization_id',orgId).eq('authority_code','GRIEVANCE').eq('classification','GRIEVANCE').eq('is_test_data',includeTestData).neq('status','CLOSED').neq('status','OUT_OF_SCOPE').order('updated_at',{ascending:false});
       if(error)throw error;
       const ids=(cases??[]).map((c:any)=>c.id);
       const{data:reports,error:reportError}=ids.length?await admin.from('case_reports').select('case_id,title').in('case_id',ids):{data:[],error:null} as any;
       if(reportError)throw reportError;
       const titles=new Map((reports??[]).map((r:any)=>[r.case_id,r.title]));
-      return json({cases:(cases??[]).map((c:any)=>({...c,title:titles.get(c.id)??c.public_case_id}))});
+      return json({cases:(cases??[]).map((c:any)=>({...c,title:titles.get(c.id)??c.public_case_id})),uatMode:includeTestData});
     }
 
     const caseId=String(body.caseId??'').trim();
     if(!caseId)return json({error:'Case ID wajib.'},400);
-    const c=await getCase(caseId,orgId);
+    const c=await getCase(caseId,orgId,includeTestData);
 
     if(action==='DETAIL'){
       const results=await Promise.all([

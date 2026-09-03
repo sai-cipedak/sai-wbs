@@ -27,8 +27,9 @@
   <section id="workspacePanel" hidden>
     <div class="internal-toolbar">
       <div><p class="eyebrow">Pengaduan Layanan</p><h1 class="internal-title">Workspace Koordinator Pengaduan</h1><p class="muted" id="userLabel"></p></div>
-      <div class="action-row"><a class="button secondary" href="grievance-followup.html">Follow-up Pasca Penutupan</a><button id="refreshButton" class="secondary" type="button">Segarkan</button><button id="logoutButton" class="text-button" type="button">Keluar</button></div>
+      <div class="action-row"><a id="followupLink" class="button secondary" href="grievance-followup.html">Follow-up Pasca Penutupan</a><button id="refreshButton" class="secondary" type="button">Segarkan</button><button id="logoutButton" class="text-button" type="button">Keluar</button></div>
     </div>
+    <div id="uatNotice" class="form-message error" hidden><strong>MODE UAT.</strong> Halaman ini hanya menampilkan dan memproses data berlabel test. Mode ini memerlukan role Koordinator Pengaduan + SYSTEM_ADMIN dan tidak dapat memproses case production.</div>
     <div class="notice">Keluhan layanan ditangani melalui resolution plan yang proporsional. Bila ditemukan risiko perlindungan anak, Koordinator dapat mengalihkan langsung ke Otoritas Perlindungan.</div>
     <div id="pageMessage" class="form-message internal-message" hidden></div>
     <div class="internal-layout">
