@@ -10,7 +10,8 @@
   <link rel="stylesheet" href="assets/css/evidence.css?v=20260828-1" />
   <style>
     .grievance-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grievance-grid .wide{grid-column:1/-1}.resolution-list{display:grid;gap:10px}.resolution-card{border:1px solid var(--line);border-radius:12px;padding:13px;background:#fff}.resolution-card p{margin:4px 0}.grievance-alert{border:1px solid #efb2ad;background:#fff7f6;border-radius:14px;padding:14px 16px}.grievance-ok{border:1px solid #b8d8c3;background:#f6fbf7;border-radius:14px;padding:14px 16px}
-    @media(max-width:760px){.grievance-grid{grid-template-columns:1fr}.grievance-grid .wide{grid-column:auto}}
+    .grievance-workspace{margin-top:18px}.grievance-case-panel{display:flex;max-height:calc(100vh - 32px);flex-direction:column}.grievance-case-panel>.eyebrow{margin:0 0 12px}.grievance-case-panel .case-list{overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-right:4px}
+    @media(max-width:760px){.grievance-grid{grid-template-columns:1fr}.grievance-grid .wide{grid-column:auto}.grievance-case-panel{max-height:none}.grievance-case-panel .case-list{overflow:visible;padding-right:0}}
   </style>
   <script src="assets/js/config.js"></script>
 </head>
@@ -32,9 +33,9 @@
     <div id="uatNotice" class="form-message error" hidden><strong>MODE UAT.</strong> Halaman ini hanya menampilkan dan memproses data berlabel test. Mode ini memerlukan role Koordinator Pengaduan + SYSTEM_ADMIN dan tidak dapat memproses case production.</div>
     <div class="notice">Keluhan layanan ditangani melalui resolution plan yang proporsional. Bila ditemukan risiko perlindungan anak, Koordinator dapat mengalihkan langsung ke Otoritas Perlindungan.</div>
     <div id="pageMessage" class="form-message internal-message" hidden></div>
-    <div class="internal-layout">
-      <aside class="case-list-panel"><p class="eyebrow">Case Pengaduan</p><div id="caseList" class="case-list"></div></aside>
-      <section id="caseDetail" class="case-detail-panel"><p class="empty-state">Pilih case untuk melihat detail.</p></section>
+    <div class="internal-grid grievance-workspace">
+      <aside class="case-list-panel grievance-case-panel"><p class="eyebrow">Case Pengaduan</p><div id="caseList" class="case-list"></div></aside>
+      <section id="caseDetail" class="case-detail"><p class="empty-state">Pilih case untuk melihat detail.</p></section>
     </div>
   </section>
 </main>
