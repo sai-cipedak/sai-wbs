@@ -28,8 +28,9 @@
   <section id="workspacePanel" hidden>
     <div class="internal-toolbar">
       <div><p class="eyebrow">Safeguarding</p><h1 class="internal-title">Workspace Otoritas Perlindungan</h1><p class="muted" id="userLabel"></p></div>
-      <div class="action-row"><a class="button secondary" href="hse-followup.html">Follow-up 30/60/90</a><button id="refreshButton" class="secondary" type="button">Segarkan</button><button id="logoutButton" class="text-button" type="button">Keluar</button></div>
+      <div class="action-row"><a id="followupLink" class="button secondary" href="hse-followup.html">Follow-up 30/60/90</a><button id="refreshButton" class="secondary" type="button">Segarkan</button><button id="logoutButton" class="text-button" type="button">Keluar</button></div>
     </div>
+    <div id="uatNotice" class="form-message error" hidden><strong>MODE UAT.</strong> Halaman ini hanya menampilkan dan memproses data berlabel test. Mode ini memerlukan role Otoritas Perlindungan + SYSTEM_ADMIN dan tidak dapat memproses case production.</div>
     <div class="notice"><strong>Fast lane:</strong> bila ada immediate danger, protective action harus dimulai pada hari yang sama dan dicatat sebelum case dapat masuk pembentukan Tim Pemeriksa.</div>
     <div id="pageMessage" class="form-message internal-message" hidden></div>
     <div class="internal-layout">
@@ -39,8 +40,8 @@
   </section>
 </main>
 <footer class="container">SAI Cipedak · Portal Pelaporan</footer>
-<script type="module" src="assets/js/hse.js?v=20260828-2"></script>
-<script type="module" src="assets/js/hse-authority.js?v=20260827-1"></script>
+<script type="module" src="assets/js/hse.js?v=20260903-1"></script>
+<script type="module" src="assets/js/hse-authority.js?v=20260903-1"></script>
 <script type="module" src="assets/js/evidence-workspace.js?v=20260828-1"></script>
 </body>
 </html>

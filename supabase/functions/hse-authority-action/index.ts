@@ -26,8 +26,14 @@ async function hseOrg(uid:string){
   }
   throw new Error('FORBIDDEN');
 }
-async function hseCase(caseId:string|null,publicCaseId:string|null,orgId:string){
-  let q=admin.from('cases').select('id,public_case_id,status,classification,authority_code,organization_id').eq('organization_id',orgId).eq('authority_code','HSE').eq('classification','SAFEGUARDING');
+async function hasRole(uid:string,orgId:string,role:string){
+  const now=new Date().toISOString();
+  const{data,error}=await admin.from('user_system_roles').select('user_id').eq('user_id',uid).eq('organization_id',orgId).eq('role_code',role).lte('active_from',now).or(`active_until.is.null,active_until.gt.${now}`).limit(1);
+  if(error)throw error;
+  return (data??[]).length>0;
+}
+async function hseCase(caseId:string|null,publicCaseId:string|null,orgId:string,includeTestData:boolean){
+  let q=admin.from('cases').select('id,public_case_id,status,classification,authority_code,organization_id,is_test_data').eq('organization_id',orgId).eq('authority_code','HSE').eq('classification','SAFEGUARDING').eq('is_test_data',includeTestData);
   q=caseId?q.eq('id',caseId):q.eq('public_case_id',publicCaseId??'');
   const{data,error}=await q.maybeSingle();
   if(error)throw error;
@@ -43,10 +49,12 @@ Deno.serve(async(req:Request)=>{
     const orgId=await hseOrg(user.id);
     const body=await req.json().catch(()=>({}));
     const action=String(body.action??'DETAIL').toUpperCase();
+    const includeTestData=body.includeTestData===true;
+    if(includeTestData&&!(await hasRole(user.id,orgId,'SYSTEM_ADMIN')))return json({error:'Mode UAT hanya tersedia untuk SYSTEM_ADMIN yang juga memiliki role Otoritas Perlindungan.'},403);
     const caseId=String(body.caseId??'').trim()||null;
     const publicCaseId=String(body.publicCaseId??'').trim()||null;
     if(!caseId&&!publicCaseId)return json({error:'Case ID atau nomor laporan wajib.'},400);
-    const c=await hseCase(caseId,publicCaseId,orgId);
+    const c=await hseCase(caseId,publicCaseId,orgId,includeTestData);
     const cid=String(c.id);
 
     if(action==='DETAIL'){

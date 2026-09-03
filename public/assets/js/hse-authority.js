@@ -2,12 +2,13 @@ import { supabaseClient } from './supabase-client.js';
 
 const detail=document.querySelector('#caseDetail');
 const pageMessage=document.querySelector('#pageMessage');
+const UAT=new URLSearchParams(location.search).get('uat')==='1';
 let lastKey='';let rendering=false;
 const FINDING={PROVEN:'Terbukti',PARTIALLY_PROVEN:'Sebagian Terbukti',NOT_PROVEN:'Tidak Terbukti',INCONCLUSIVE:'Tidak Dapat Disimpulkan',NOT_EXAMINABLE:'Tidak Dapat Diperiksa',OUT_OF_SCOPE:'Di Luar Ruang Lingkup'};
 function el(tag,text,cls){const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;}
 function show(text,kind='info'){if(!pageMessage)return;pageMessage.textContent=text;pageMessage.className=`form-message internal-message ${kind}`;pageMessage.hidden=!text;}
 function fmt(v){return v?new Intl.DateTimeFormat('id-ID',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Jakarta'}).format(new Date(v)):'—';}
-async function invoke(body){const{data,error}=await supabaseClient.functions.invoke('hse-authority-action',{body});if(error){let msg=error.message;try{const c=await error.context?.json();if(c?.error)msg=c.error;}catch(_){}throw new Error(msg||'Aksi otoritas safeguarding belum dapat diproses.');}return data;}
+async function invoke(body){const{data,error}=await supabaseClient.functions.invoke('hse-authority-action',{body:{...body,includeTestData:UAT}});if(error){let msg=error.message;try{const c=await error.context?.json();if(c?.error)msg=c.error;}catch(_){}throw new Error(msg||'Aksi otoritas safeguarding belum dapat diproses.');}return data;}
 function publicCaseId(){const s=detail?.querySelector('.case-meta strong');return s?.textContent?.trim()||'';}
 function statusText(){return detail?.querySelector('.status-badge')?.textContent?.trim()||'';}
 function field(label,node){const w=document.createElement('label');w.textContent=label;w.append(node);return w;}
