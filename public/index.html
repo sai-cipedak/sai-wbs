@@ -6,16 +6,28 @@
   <meta name="description" content="Portal pelaporan integritas, perlindungan, dan pengaduan SAI Cipedak." />
   <title>Portal Pelaporan SAI Cipedak</title>
   <link rel="stylesheet" href="assets/css/app.css" />
+  <script src="assets/js/config.js"></script>
+  <script type="module" src="assets/js/portal-shell.js?v=20260903-1"></script>
 </head>
 <body>
-  <header><div class="container header-inner"><div class="brand">SAI Cipedak</div><div class="pill">Portal Pelaporan</div></div></header>
+  <header><div class="container header-inner"><a class="brand" href="index.html">SAI Cipedak</a><div class="pill">Portal Pelaporan</div></div></header>
   <main class="container">
     <section class="hero">
-      <h1>Sampaikan laporan atau pengaduan dengan aman.</h1>
+      <p class="eyebrow home-eyebrow">Laduni SAI</p>
+      <h1>Layanan aduan komunitas yang aman dan terpercaya.</h1>
       <p class="lead">Portal ini tersedia bagi OTS dan staf SAI Cipedak untuk menyampaikan dugaan pelanggaran, masalah keselamatan dan perlindungan anak, maupun keluhan terkait layanan sekolah.</p>
     </section>
-    <section class="grid" aria-label="Pilihan pelaporan">
+    <section id="publicStats" class="public-stats" aria-label="Statistik agregat laporan">
+      <article class="stat-card stat-total"><span>Total laporan</span><strong data-stat="total">–</strong></article>
+      <article class="stat-card stat-received"><span>Baru diterima</span><strong data-stat="received">–</strong></article>
+      <article class="stat-card stat-review"><span>Dalam penelaahan</span><strong data-stat="review">–</strong></article>
+      <article class="stat-card stat-handling"><span>Dalam penanganan</span><strong data-stat="handling">–</strong></article>
+      <article class="stat-card stat-closed"><span>Selesai</span><strong data-stat="closed">–</strong></article>
+    </section>
+    <p id="statsMessage" class="stats-note" hidden></p>
+    <section class="grid home-actions" aria-label="Pilihan pelaporan">
       <article class="card"><h2>Laporan dengan identitas</h2><p>Masuk dengan akun Google yang terdaftar. Identitas tetap dirahasiakan dari Tim Pemeriksa secara default.</p><a class="button primary" href="lapor-identitas.html">Sampaikan laporan</a></article>
+      <article class="card"><h2>Laporan Saya</h2><p>Masuk dengan akun Google untuk melihat status, pesan, dan bukti pada laporan beridentitas.</p><a class="button secondary" href="my-reports.html">Cek laporan saya</a></article>
       <article class="card"><h2>Tanpa menyebutkan identitas</h2><p>Sampaikan laporan tanpa akun personal. Anda akan menerima Nomor Laporan dan Kunci Rahasia.</p><a class="button secondary" href="lapor-anonim.html">Lapor tanpa identitas</a></article>
       <article class="card"><h2>Cek perkembangan laporan</h2><p>Gunakan Nomor Laporan dan Kunci Rahasia untuk melihat status laporan tanpa identitas.</p><a class="button secondary" href="cek-laporan.html">Cek laporan</a></article>
     </section>
@@ -23,5 +35,6 @@
   </main>
   <footer class="container">© <span id="year"></span> SAI Cipedak</footer>
   <script>document.querySelector('#year').textContent = new Date().getFullYear();</script>
+  <script type="module" src="assets/js/home.js?v=20260903-1"></script>
 </body>
 </html>
