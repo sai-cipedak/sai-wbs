@@ -9,7 +9,22 @@ export function renderFollowupMasterDetail(target,rows,{emptyText,renderCard}){
   const cases=[...groups.values()];let selected=cases[0].key;
   const layout=node('div',null,'followup-browser'),sidebar=node('aside',null,'followup-case-panel'),mobile=document.createElement('select'),buttons=node('div',null,'followup-case-list'),detail=node('div',null,'followup-case-detail');
   sidebar.append(node('p','Pilih parent case','eyebrow'));mobile.className='followup-case-select';mobile.setAttribute('aria-label','Pilih parent case');
-  function paint(){buttons.querySelectorAll('button').forEach(b=>{const active=b.dataset.caseId===selected;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});mobile.value=selected;detail.replaceChildren();const current=groups.get(selected),heading=node('header',null,'followup-case-heading'),copy=node('div');copy.append(node('p','Parent case','eyebrow'),node('h2',current.publicCaseId),node('p',current.title,'muted'));heading.append(copy,node('span',`${current.rows.length} jadwal`,'status-badge'));detail.append(heading);current.rows.forEach(item=>detail.append(renderCard(item)));}
+  function paint(){
+    buttons.querySelectorAll('button').forEach(b=>{const active=b.dataset.caseId===selected;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});
+    mobile.value=selected;detail.replaceChildren();
+    const current=groups.get(selected),heading=node('header',null,'followup-case-heading'),copy=node('div');
+    const cycles=new Map();
+    for(const row of current.rows){const key=row.closure_id||'legacy';if(!cycles.has(key))cycles.set(key,[]);cycles.get(key).push(row);}
+    const ordered=[...cycles.values()].sort((a,b)=>Math.min(...b.map(x=>new Date(x.due_at).getTime()))-Math.min(...a.map(x=>new Date(x.due_at).getTime())));
+    copy.append(node('p','Parent case','eyebrow'),node('h2',current.publicCaseId),node('p',current.title,'muted'));
+    heading.append(copy,node('span',`${ordered.length} siklus · ${current.rows.length} jadwal`,'status-badge'));detail.append(heading);
+    ordered.forEach((cycle,index)=>{
+      const active=cycle.some(x=>x.status==='SCHEDULED'||x.escalation_status==='OPEN');
+      const section=node('section',null,'followup-cycle'),cycleHead=node('div',null,'followup-cycle-heading'),cycleNo=ordered.length-index;
+      cycleHead.append(node('div',`Siklus Penutupan #${cycleNo}`,'followup-cycle-title'),node('span',active?'Aktif':'Histori',`status-badge ${active?'followup-upcoming':'followup-completed'}`));
+      section.append(cycleHead);cycle.forEach(item=>section.append(renderCard(item)));detail.append(section);
+    });
+  }
   for(const item of cases){const active=item.rows.filter(r=>['UPCOMING','DUE_SOON','OVERDUE'].includes(r.effective_status)).length,latest=item.rows.find(r=>r.effective_status==='OVERDUE')||item.rows.find(r=>r.effective_status==='DUE_SOON')||item.rows.find(r=>r.effective_status==='UPCOMING')||item.rows[item.rows.length-1],option=document.createElement('option');option.value=item.key;option.textContent=`${item.publicCaseId} — ${item.title||''}`;mobile.append(option);const button=node('button',null,'followup-case-button');button.type='button';button.dataset.caseId=item.key;button.append(node('strong',item.publicCaseId),node('span',item.title||'Tanpa judul','followup-case-title'),node('small',active?`${active} perlu dipantau`:`${item.rows.length} histori · ${LABEL[latest?.effective_status]||latest?.effective_status||'—'}`));button.addEventListener('click',()=>{selected=item.key;paint();});buttons.append(button);}
   mobile.addEventListener('change',()=>{selected=mobile.value;paint();});sidebar.append(mobile,buttons);layout.append(sidebar,detail);target.append(layout);paint();
 }
