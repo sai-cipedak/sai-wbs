@@ -10,7 +10,9 @@ Deno.serve(async(req)=>{if(req.method==='OPTIONS')return new Response('ok',{head
  const user=await currentUser(req),orgId=await roleOrg(user.id,'GRIEVANCE_COORDINATOR'),body=await req.json().catch(()=>({})),action=String(body.action??'LIST_FOLLOWUPS'),includeTestData=body.includeTestData===true;
  if(includeTestData&&!(await hasRole(user.id,orgId,'SYSTEM_ADMIN')))return json({error:'Mode UAT hanya tersedia untuk SYSTEM_ADMIN yang juga memiliki role Koordinator Pengaduan.'},403);
  if(action==='LIST_FOLLOWUPS'){
-  let cq=admin.from('cases').select('id,public_case_id,classification,reporting_mode,closed_at,status,authority_code,is_test_data,test_label').eq('organization_id',orgId).eq('authority_code','GRIEVANCE').eq('classification','GRIEVANCE').eq('status','CLOSED');
+  // Keep completed/cancelled follow-up history visible after a follow-up reopens
+  // the case into REMEDIATION. Mutation paths below still require CLOSED.
+  let cq=admin.from('cases').select('id,public_case_id,classification,reporting_mode,closed_at,status,authority_code,is_test_data,test_label').eq('organization_id',orgId).eq('authority_code','GRIEVANCE').eq('classification','GRIEVANCE');
   cq=includeTestData?cq.eq('is_test_data',true):cq.eq('is_test_data',false);
   const{data:cases,error:ce}=await cq.order('closed_at',{ascending:false});if(ce)throw ce;
   const ids=(cases??[]).map((x:any)=>x.id);if(!ids.length)return json({followups:[],counts:{upcoming:0,dueSoon:0,overdue:0,openEscalations:0},uatMode:includeTestData});
@@ -20,7 +22,7 @@ Deno.serve(async(req)=>{if(req.method==='OPTIONS')return new Response('ok',{head
   ]);if(fe)throw fe;
   const linkedIds=[...new Set((fu??[]).map((x:any)=>x.linked_case_id).filter(Boolean))];const{data:linked}=linkedIds.length?await admin.from('cases').select('id,public_case_id,status,authority_code').in('id',linkedIds):{data:[]} as any;
   const cm=new Map((cases??[]).map((c:any)=>[c.id,c])),tm=new Map((reports??[]).map((r:any)=>[r.case_id,r.title])),lm=new Map((linked??[]).map((c:any)=>[c.id,c]));
-  const rows=(fu??[]).map((f:any)=>{const c:any=cm.get(f.case_id);return{...f,effective_status:effective(f),public_case_id:c.public_case_id,classification:c.classification,reporting_mode:c.reporting_mode,closed_at:c.closed_at,title:tm.get(f.case_id)??c.public_case_id,is_test_data:c.is_test_data,test_label:c.test_label,linked_case:f.linked_case_id?(lm.get(f.linked_case_id)??null):null};});
+  const rows=(fu??[]).map((f:any)=>{const c:any=cm.get(f.case_id);return{...f,effective_status:effective(f),public_case_id:c.public_case_id,case_status:c.status,classification:c.classification,reporting_mode:c.reporting_mode,closed_at:c.closed_at,title:tm.get(f.case_id)??c.public_case_id,is_test_data:c.is_test_data,test_label:c.test_label,linked_case:f.linked_case_id?(lm.get(f.linked_case_id)??null):null};});
   return json({followups:rows,uatMode:includeTestData,counts:{upcoming:rows.filter((x:any)=>x.effective_status==='UPCOMING').length,dueSoon:rows.filter((x:any)=>x.effective_status==='DUE_SOON').length,overdue:rows.filter((x:any)=>x.effective_status==='OVERDUE').length,openEscalations:rows.filter((x:any)=>x.escalation_status==='OPEN').length}});
  }
  const caseId=String(body.caseId??''),followupId=String(body.followupId??'');if(!caseId||!followupId)return json({error:'Case dan follow-up wajib dipilih.'},400);
