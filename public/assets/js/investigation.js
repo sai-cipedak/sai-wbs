@@ -7,6 +7,7 @@ const pageMessage = document.querySelector('#pageMessage');
 const userLabel = document.querySelector('#userLabel');
 const caseList = document.querySelector('#caseList');
 const caseDetail = document.querySelector('#caseDetail');
+const UAT = new URLSearchParams(location.search).get('uat') === '1';
 let cases = [];
 let selectedCaseId = null;
 
@@ -22,7 +23,7 @@ function el(tag, text, className) { const n = document.createElement(tag); if (t
 function fmt(v) { return v ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(v)) : '—'; }
 function show(text, kind = 'info') { pageMessage.textContent = text; pageMessage.className = `form-message internal-message ${kind}`; pageMessage.hidden = !text; }
 async function invoke(body) {
-  const { data, error } = await supabaseClient.functions.invoke('investigation-case-action', { body });
+  const { data, error } = await supabaseClient.functions.invoke('investigation-case-action', { body: { ...body, includeTestData: UAT } });
   if (error) {
     let detail = error.message;
     try { const c = await error.context?.json(); if (c?.error) detail = c.error; } catch (_) {}
@@ -35,6 +36,7 @@ async function authorize() {
   const { data: { session } } = await supabaseClient.auth.getSession();
   if (!session?.user) { loginPanel.hidden = false; workspacePanel.hidden = true; return; }
   loginPanel.hidden = true; workspacePanel.hidden = false; userLabel.textContent = session.user.email || 'Akun Tim Pemeriksa';
+  document.querySelector('#uatNotice').hidden = !UAT;
   try { await loadCases(); } catch (e) { show(e.message, 'error'); }
 }
 
@@ -180,7 +182,7 @@ function renderEvidence(data) {
   return p;
 }
 
-document.querySelector('#googleLogin')?.addEventListener('click',async()=>{const redirectTo=new URL('investigation.html',window.location.href).href;const{error}=await supabaseClient.auth.signInWithOAuth({provider:'google',options:{redirectTo}});if(error){loginMessage.textContent=error.message;loginMessage.hidden=false;}});
+document.querySelector('#googleLogin')?.addEventListener('click',async()=>{const redirectTo=new URL(`investigation.html${UAT?'?uat=1':''}`,window.location.href).href;const{error}=await supabaseClient.auth.signInWithOAuth({provider:'google',options:{redirectTo}});if(error){loginMessage.textContent=error.message;loginMessage.hidden=false;}});
 document.querySelector('#logoutButton')?.addEventListener('click',async()=>{await supabaseClient.auth.signOut();location.reload();});
 document.querySelector('#refreshButton')?.addEventListener('click',loadCases);
 await authorize();
