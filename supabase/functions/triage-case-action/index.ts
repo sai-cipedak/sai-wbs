@@ -39,11 +39,12 @@ Deno.serve(async (req: Request) => {
     const payload = await req.json() as Record<string, unknown>;
     const action = String(payload.action ?? '').toUpperCase();
     const caseId = String(payload.caseId ?? '');
+    const includeTestData = payload.includeTestData === true;
     if (!ACTIONS.has(action) || !caseId) return jsonResponse({ error: 'Aksi atau laporan tidak valid.' }, 400);
 
     const { data: caseRow, error: caseError } = await admin
       .from('cases')
-      .select('id, organization_id, public_case_id, status, authority_code')
+      .select('id, organization_id, public_case_id, status, authority_code, is_test_data')
       .eq('id', caseId)
       .single();
     if (caseError || !caseRow) return jsonResponse({ error: 'Laporan tidak ditemukan.' }, 404);
@@ -62,6 +63,26 @@ Deno.serve(async (req: Request) => {
       return from <= now.getTime() && now.getTime() < until;
     });
     if (!hasRole) return jsonResponse({ error: 'Anda tidak memiliki kewenangan Penelaah Awal.' }, 403);
+
+    if (includeTestData) {
+      const { data: adminRows, error: adminRoleError } = await admin
+        .from('user_system_roles')
+        .select('active_from, active_until')
+        .eq('user_id', user.id)
+        .eq('organization_id', caseRow.organization_id)
+        .eq('role_code', 'SYSTEM_ADMIN');
+      if (adminRoleError) throw adminRoleError;
+      const hasActiveAdminRole = (adminRows ?? []).some((r) => {
+        const from = new Date(r.active_from).getTime();
+        const until = r.active_until ? new Date(r.active_until).getTime() : Number.POSITIVE_INFINITY;
+        return from <= now.getTime() && now.getTime() < until;
+      });
+      if (!hasActiveAdminRole) return jsonResponse({ error: 'Mode UAT hanya tersedia untuk SYSTEM_ADMIN aktif.' }, 403);
+    }
+
+    if (caseRow.is_test_data !== includeTestData) {
+      return jsonResponse({ error: 'Laporan tidak ditemukan pada mode ini.' }, 404);
+    }
 
     if (caseRow.authority_code !== 'TRIAGE' || ['CLOSED', 'OUT_OF_SCOPE'].includes(caseRow.status)) {
       return jsonResponse({ error: 'Laporan ini sudah tidak berada dalam kewenangan Penelaah Awal.' }, 409);

@@ -46,18 +46,18 @@ async function authorize() {
   allowUat = requestedUat && roleActive(roles, 'SYSTEM_ADMIN');
   loginPanel.hidden = true; dashboardPanel.hidden = false;
   if (requestedUat && !allowUat) showMessage('Mode UAT hanya tersedia untuk SYSTEM_ADMIN aktif.', 'error');
-  else if (allowUat) showMessage('Mode UAT aktif — data test ditampilkan bersama antrean Penelaahan Awal.');
+  else if (allowUat) showMessage('Mode UAT aktif — hanya data test yang ditampilkan.');
   await loadCases();
 }
 
 async function loadCases() {
-  const preservedMessage = allowUat ? 'Mode UAT aktif — data test ditampilkan bersama antrean Penelaahan Awal.' : '';
+  const preservedMessage = allowUat ? 'Mode UAT aktif — hanya data test yang ditampilkan.' : '';
   showMessage(preservedMessage);
   let query = supabaseClient.from('cases')
     .select('id, public_case_id, reporting_mode, status, classification, authority_code, submitted_at, is_test_data, test_label')
     .eq('authority_code', 'TRIAGE')
     .not('status', 'in', '(CLOSED,OUT_OF_SCOPE)');
-  if (!allowUat) query = query.eq('is_test_data', false);
+  query = query.eq('is_test_data', allowUat);
   const { data, error } = await query.order('submitted_at', { ascending: false });
   if (error) { showMessage('Antrean laporan belum dapat dimuat.', 'error'); return; }
   currentCases = data ?? [];
@@ -148,7 +148,7 @@ function renderDetail(item, report, messages) {
 
 async function runAction(action, caseId, payload) {
   showMessage('Menyimpan perubahan...');
-  const { data, error } = await supabaseClient.functions.invoke('triage-case-action', { body: { action, caseId, ...payload } });
+  const { data, error } = await supabaseClient.functions.invoke('triage-case-action', { body: { action, caseId, includeTestData: allowUat, ...payload } });
   if (error) {
     let detail = error.message;
     try { const context = await error.context?.json(); if (context?.error) detail = context.error; } catch (_) {}
