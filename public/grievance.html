@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="robots" content="noindex,nofollow" />
-  <meta name="description" content="Workspace Koordinator Pengaduan SAI Cipedak." />
-  <title>Pengaduan Layanan — SAI Cipedak</title>
+  <meta name="description" content="Workspace Pengaduan SAI Cipedak." />
+  <title>Pengaduan — SAI Cipedak</title>
   <link rel="stylesheet" href="assets/css/app.css?v=20260904-4" />
   <link rel="stylesheet" href="assets/css/evidence.css?v=20260828-1" />
   <style>
@@ -14,25 +14,25 @@
     @media(max-width:760px){.grievance-grid{grid-template-columns:1fr}.grievance-grid .wide{grid-column:auto}.grievance-case-panel{max-height:none}.grievance-case-panel .case-list{overflow:visible;padding-right:0}}
   </style>
   <script src="assets/js/config.js"></script>
-  <script type="module" src="assets/js/portal-shell.js?v=20260904-2"></script>
+  <script type="module" src="assets/js/portal-shell.js?v=20260904-3"></script>
 </head>
 <body>
-<header><div class="container header-inner"><a class="brand" href="index.html">SAI Cipedak</a><div class="pill">Koordinator Pengaduan</div></div></header>
+<header><div class="container header-inner"><a class="brand" href="index.html">SAI Cipedak</a><div class="pill">Pengaduan</div></div></header>
 <main class="container">
   <section id="loginPanel" class="form-card compact-form" hidden>
-    <h1 class="internal-title">Pengaduan Layanan</h1>
-    <p>Masuk menggunakan akun Google yang memiliki role Koordinator Pengaduan.</p>
+    <h1 class="internal-title">Pengaduan</h1>
+    <p>Masuk menggunakan akun Google yang memiliki role Pengaduan.</p>
     <button id="googleLogin" class="primary" type="button">Masuk dengan Google</button>
     <div id="loginMessage" class="form-message" hidden></div>
   </section>
 
   <section id="workspacePanel" hidden>
     <div class="internal-toolbar">
-      <div><p class="eyebrow">Workspace Internal</p><h1 class="internal-title">Koordinator Pengaduan</h1><p class="muted" id="userLabel"></p></div>
+      <div><p class="eyebrow">Workspace Internal</p><h1 class="internal-title">Pengaduan</h1><p class="muted" id="userLabel"></p></div>
       <div class="action-row"><a id="followupLink" class="button secondary" href="grievance-followup.html">Follow-up Pasca Penutupan</a><button id="refreshButton" class="secondary" type="button">Muat Ulang</button><button id="logoutButton" class="text-button" type="button">Keluar</button></div>
     </div>
-    <div id="uatNotice" class="form-message error" hidden><strong>MODE UAT.</strong> Halaman ini hanya menampilkan dan memproses data berlabel test. Mode ini memerlukan role Koordinator Pengaduan + SYSTEM_ADMIN dan tidak dapat memproses case production.</div>
-    <div class="notice">Keluhan layanan ditangani melalui resolution plan yang proporsional. Bila ditemukan risiko perlindungan anak, Koordinator dapat mengalihkan langsung ke Otoritas Perlindungan.</div>
+    <div id="uatNotice" class="form-message error" hidden><strong>MODE UAT.</strong> Halaman ini hanya menampilkan dan memproses data berlabel test. Mode ini memerlukan role Pengaduan + SYSTEM_ADMIN dan tidak dapat memproses case production.</div>
+    <div class="notice">Keluhan layanan ditangani melalui resolution plan yang proporsional. Bila ditemukan risiko safeguarding, case dapat dialihkan langsung ke Safeguarding.</div>
     <div id="pageMessage" class="form-message internal-message" hidden></div>
     <div class="internal-grid grievance-workspace">
       <aside class="case-list-panel grievance-case-panel"><p class="eyebrow">Case Pengaduan</p><div id="caseList" class="case-list"></div></aside>
