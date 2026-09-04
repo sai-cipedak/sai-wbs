@@ -237,17 +237,17 @@ function normalizeHandlerMenu() {
   if (currentPage === config.active) activeCases.classList.add('case-handler-active');
 
   const followup = document.createElement('a');
+  followup.id = 'followupLink';
   followup.className = 'button secondary';
   followup.href = `${config.followup}${uatSuffix}`;
   followup.textContent = 'Follow Up Pasca Penutupan';
   if (currentPage === config.followup) followup.classList.add('case-handler-active');
 
   const refresh = document.createElement('button');
-  refresh.id = 'portalRefreshButton';
+  refresh.id = 'refreshButton';
   refresh.type = 'button';
   refresh.className = 'secondary';
   refresh.textContent = 'Muat Ulang';
-  refresh.addEventListener('click', () => location.reload());
 
   row.append(activeCases, followup, refresh);
 }
