@@ -1,0 +1,106 @@
+/* Portal shell refinements: case-handler menu consistency + compact mobile header */
+.case-handler-nav .button,
+.case-handler-nav button { white-space: nowrap; }
+.case-handler-nav .case-handler-active {
+  background: #cfe3f7;
+  color: var(--primary);
+  box-shadow: inset 0 0 0 1px rgba(22,89,155,.08);
+}
+
+.portal-account-mobile { display: none; }
+
+@media (max-width: 640px) {
+  .header-inner {
+    display: grid;
+    grid-template-columns: 52px minmax(0,1fr);
+    align-items: center;
+    gap: 4px 12px;
+    padding: 14px 0 10px;
+  }
+  .portal-brand { display: contents; }
+  .portal-brand img {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    width: 52px;
+    height: 52px;
+    align-self: center;
+  }
+  .portal-brand span {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
+    min-width: 0;
+  }
+  .portal-brand strong { font-size: 18px; }
+  .portal-brand small {
+    display: block;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .portal-header-tools {
+    grid-column: 2;
+    grid-row: 2;
+    margin: 0;
+    justify-content: flex-start;
+    align-self: start;
+  }
+  .portal-account { justify-content: flex-start; }
+  .portal-account-copy { display: none; }
+  .portal-account-mobile {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 0;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+  .portal-account-mobile a {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--primary);
+    text-decoration: underline;
+  }
+  .portal-account-mobile .portal-account-logout {
+    padding: 0;
+    font-size: 12px;
+  }
+  .portal-auth-button { justify-self: start; }
+  .portal-nav {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    margin-top: 8px;
+  }
+  .internal-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .internal-toolbar .action-row.case-handler-nav {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0,1fr) minmax(0,1.35fr) auto;
+    gap: 8px;
+  }
+  .internal-toolbar .action-row.case-handler-nav .button,
+  .internal-toolbar .action-row.case-handler-nav button {
+    width: 100%;
+    min-width: 0;
+    padding: 10px 9px;
+    font-size: 12px;
+    white-space: normal;
+  }
+}
+
+@media (max-width: 430px) {
+  .internal-toolbar .action-row.case-handler-nav {
+    grid-template-columns: 1fr 1fr;
+  }
+  .internal-toolbar .action-row.case-handler-nav button:last-child {
+    grid-column: 1 / -1;
+  }
+}
