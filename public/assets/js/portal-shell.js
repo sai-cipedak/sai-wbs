@@ -20,6 +20,14 @@ const HANDLER_PAGES = {
   'dekom-followup.html': { active: 'dekom.html', followup: 'dekom-followup.html', title: 'Dekom' },
 };
 
+const TERMINOLOGY = [
+  [/Otoritas Perlindungan\s*\(HSE\)/g, 'Safeguarding'],
+  [/Otoritas Perlindungan/g, 'Safeguarding'],
+  [/Perlindungan\/HSE/g, 'Safeguarding'],
+  [/Perlindungan/g, 'Safeguarding'],
+  [/\bHSE\b/g, 'Safeguarding'],
+];
+
 const currentPage = location.pathname.split('/').pop() || 'index.html';
 const uatSuffix = new URLSearchParams(location.search).get('uat') === '1' ? '?uat=1' : '';
 
@@ -30,6 +38,39 @@ function installAdjustmentStyles() {
   style.href = 'assets/css/portal-adjustments.css?v=20260904-2';
   style.dataset.portalAdjustments = '1';
   document.head.append(style);
+}
+
+function normalizeTextValue(value) {
+  let result = value;
+  for (const [pattern, replacement] of TERMINOLOGY) result = result.replace(pattern, replacement);
+  return result;
+}
+
+function normalizeTerminology(root = document.body) {
+  if (!root) return;
+  if (root.nodeType === Node.TEXT_NODE) {
+    const parent = root.parentElement;
+    if (!parent || ['SCRIPT', 'STYLE', 'NOSCRIPT'].includes(parent.tagName)) return;
+    const next = normalizeTextValue(root.nodeValue || '');
+    if (next !== root.nodeValue) root.nodeValue = next;
+    return;
+  }
+  if (root.nodeType !== Node.ELEMENT_NODE && root.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) return;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) normalizeTerminology(node);
+}
+
+function watchTerminology() {
+  normalizeTerminology(document.body);
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      if (mutation.type === 'characterData') normalizeTerminology(mutation.target);
+      for (const node of mutation.addedNodes) normalizeTerminology(node);
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 }
 
 function isPageActive(href) {
@@ -266,6 +307,7 @@ function normalizeHandlerMenu() {
 installAdjustmentStyles();
 normalizeHandlerHeader();
 normalizeHandlerMenu();
+watchTerminology();
 
 const header = document.querySelector('header .header-inner');
 if (header) {
