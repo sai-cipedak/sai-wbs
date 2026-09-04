@@ -30,6 +30,7 @@
     grid-row: 1;
     align-self: end;
     min-width: 0;
+    text-align: left;
   }
   .portal-brand strong { font-size: 18px; }
   .portal-brand small {
@@ -42,18 +43,31 @@
   .portal-header-tools {
     grid-column: 2;
     grid-row: 2;
+    width: 100%;
     margin: 0;
+    padding: 0;
     justify-content: flex-start;
     align-self: start;
+    text-align: left;
   }
-  .portal-account { justify-content: flex-start; }
+  .portal-account {
+    width: 100%;
+    justify-content: flex-start;
+    align-items: flex-start;
+    text-align: left;
+  }
   .portal-account-copy { display: none; }
   .portal-account-mobile {
     display: flex;
+    width: 100%;
     align-items: center;
+    justify-content: flex-start;
     flex-wrap: wrap;
     gap: 4px;
     min-width: 0;
+    margin: 0;
+    padding: 0;
+    text-align: left;
     font-size: 12px;
     line-height: 1.25;
   }
@@ -65,6 +79,7 @@
     white-space: nowrap;
     color: var(--primary);
     text-decoration: underline;
+    text-align: left;
   }
   .portal-account-mobile .portal-account-logout {
     padding: 0;
