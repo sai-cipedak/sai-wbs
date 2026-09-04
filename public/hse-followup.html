@@ -3,20 +3,20 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="description" content="Dashboard follow-up 30/60/90 hari untuk case safeguarding yang ditutup oleh Otoritas Perlindungan." />
+  <meta name="description" content="Dashboard follow-up 30/60/90 hari untuk case safeguarding." />
   <meta name="robots" content="noindex,nofollow" />
-  <title>Follow-up Safeguarding — SAI Cipedak</title>
+  <title>Safeguarding — SAI Cipedak</title>
   <link rel="stylesheet" href="assets/css/app.css?v=20260904-4" />
   <link rel="stylesheet" href="assets/css/followup.css" />
   <script src="assets/js/config.js"></script>
-  <script type="module" src="assets/js/portal-shell.js?v=20260904-2"></script>
+  <script type="module" src="assets/js/portal-shell.js?v=20260904-3"></script>
 </head>
 <body>
-<header><div class="container header-inner"><a class="brand" href="index.html">SAI Cipedak</a><div class="pill">Otoritas Perlindungan</div></div></header>
+<header><div class="container header-inner"><a class="brand" href="index.html">SAI Cipedak</a><div class="pill">Safeguarding</div></div></header>
 <main class="container">
   <section id="loginPanel" class="form-card compact-form" hidden>
-    <h1 class="internal-title">Follow-up Pasca Penutupan Safeguarding</h1>
-    <p>Masuk dengan akun Google yang memiliki role Otoritas Perlindungan.</p>
+    <h1 class="internal-title">Safeguarding</h1>
+    <p>Masuk dengan akun Google yang memiliki role Safeguarding.</p>
     <button id="googleLogin" class="primary" type="button">Masuk dengan Google</button>
     <div id="loginMessage" class="form-message" hidden></div>
   </section>
@@ -24,18 +24,18 @@
   <section id="dashboardPanel" hidden>
     <div class="internal-toolbar">
       <div>
-        <p class="eyebrow">Workspace internal HSE</p>
-        <h1 class="internal-title">Follow-up Pasca Penutupan Safeguarding</h1>
+        <p class="eyebrow">Workspace Internal</p>
+        <h1 class="internal-title">Safeguarding</h1>
         <p class="muted" id="userLabel"></p>
       </div>
       <div class="action-row">
-        <a class="button secondary" href="hse.html">Case Safeguarding</a>
+        <a class="button secondary" href="hse.html">Daftar Kasus Aktif</a>
         <button id="refreshButton" type="button" class="secondary">Muat Ulang</button>
         <button id="logoutButton" type="button" class="text-button">Keluar</button>
       </div>
     </div>
 
-    <div id="uatNotice" class="form-message error" hidden><strong>MODE UAT.</strong> Halaman ini hanya menampilkan data berlabel test. Mode ini memerlukan role HSE + SYSTEM_ADMIN dan tidak dapat memproses case production.</div>
+    <div id="uatNotice" class="form-message error" hidden><strong>MODE UAT.</strong> Halaman ini hanya menampilkan data berlabel test. Mode ini memerlukan role Safeguarding + SYSTEM_ADMIN dan tidak dapat memproses case production.</div>
     <div id="pageMessage" class="form-message internal-message" hidden></div>
 
     <section class="followup-stats" aria-label="Ringkasan follow-up safeguarding">
@@ -45,7 +45,7 @@
       <div class="followup-stat"><span>Open Escalation</span><strong id="countEscalations">0</strong></div>
     </section>
 
-    <div class="notice">Hanya follow-up dari case safeguarding yang ditutup dalam kewenangan <strong>Otoritas Perlindungan (HSE)</strong> yang tampil di sini. Status jatuh tempo dihitung langsung dari <strong>due_at</strong>.</div>
+    <div class="notice">Hanya follow-up dari case safeguarding yang ditutup dalam kewenangan <strong>Safeguarding</strong> yang tampil di sini. Status jatuh tempo dihitung langsung dari <strong>due_at</strong>.</div>
     <section id="followupList" class="followup-list" aria-live="polite"></section>
   </section>
 </main>
