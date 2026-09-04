@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="description" content="Portal pelaporan integritas, perlindungan, dan pengaduan SAI Cipedak." />
   <title>Portal Pelaporan SAI Cipedak</title>
-  <link rel="stylesheet" href="assets/css/app.css" />
+  <link rel="stylesheet" href="assets/css/app.css?v=20260904-1" />
   <script src="assets/js/config.js"></script>
   <script type="module" src="assets/js/portal-shell.js?v=20260903-1"></script>
 </head>
@@ -26,10 +26,22 @@
     </section>
     <p id="statsMessage" class="stats-note" hidden></p>
     <section class="grid home-actions" aria-label="Pilihan pelaporan">
-      <article class="card"><h2>Laporan dengan identitas</h2><p>Masuk dengan akun Google yang terdaftar. Identitas tetap dirahasiakan dari Tim Pemeriksa secara default.</p><a class="button primary" href="lapor-identitas.html">Sampaikan laporan</a></article>
-      <article class="card"><h2>Laporan Saya</h2><p>Masuk dengan akun Google untuk melihat status, pesan, dan bukti pada laporan beridentitas.</p><a class="button secondary" href="my-reports.html">Cek laporan saya</a></article>
-      <article class="card"><h2>Tanpa menyebutkan identitas</h2><p>Sampaikan laporan tanpa akun personal. Anda akan menerima Nomor Laporan dan Kunci Rahasia.</p><a class="button secondary" href="lapor-anonim.html">Lapor tanpa identitas</a></article>
-      <article class="card"><h2>Cek perkembangan laporan</h2><p>Gunakan Nomor Laporan dan Kunci Rahasia untuk melihat status laporan tanpa identitas.</p><a class="button secondary" href="cek-laporan.html">Cek laporan</a></article>
+      <article class="card home-action-card">
+        <h2>Laporan dengan identitas</h2>
+        <p>Masuk dengan akun Google yang terdaftar. Identitas tetap dirahasiakan dari Tim Pemeriksa secara default.</p>
+        <div class="home-card-actions">
+          <a class="button primary" href="lapor-identitas.html">Buat laporan</a>
+          <a class="button secondary" href="my-reports.html">Cek laporan</a>
+        </div>
+      </article>
+      <article class="card home-action-card">
+        <h2>Laporan tanpa identitas</h2>
+        <p>Tanpa akun personal. Simpan Nomor Laporan dan Kunci Rahasia untuk memeriksa status, pesan, dan bukti.</p>
+        <div class="home-card-actions">
+          <a class="button primary" href="lapor-anonim.html">Buat laporan</a>
+          <a class="button secondary" href="cek-laporan.html">Cek laporan</a>
+        </div>
+      </article>
     </section>
     <div class="notice"><strong>Jika ada risiko keselamatan anak yang sedang berlangsung,</strong> laporan akan langsung diprioritaskan melalui alur perlindungan anak.</div>
   </main>

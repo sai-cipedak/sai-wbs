@@ -41,6 +41,8 @@ h2 { letter-spacing: -.02em; }
 .lead { font-size: 18px; line-height: 1.65; color: var(--muted); }
 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .home-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.home-action-card { min-height: 250px; }
+.home-card-actions { display: grid; gap: 10px; }
 .home-eyebrow { color: var(--warm); }
 .public-stats { display: grid; grid-template-columns: 1.25fr repeat(4, 1fr); gap: 12px; margin: -4px 0 10px; }
 .stat-card { min-width: 0; padding: 15px 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: 0 8px 24px rgba(29,39,51,.04); }
