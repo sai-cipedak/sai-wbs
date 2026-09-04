@@ -35,7 +35,7 @@ function installAdjustmentStyles() {
   if (document.querySelector('link[data-portal-adjustments]')) return;
   const style = document.createElement('link');
   style.rel = 'stylesheet';
-  style.href = 'assets/css/portal-adjustments.css?v=20260904-2';
+  style.href = 'assets/css/portal-adjustments.css?v=20260904-3';
   style.dataset.portalAdjustments = '1';
   document.head.append(style);
 }
@@ -99,8 +99,6 @@ function installBrand(header) {
   const logo = document.createElement('img');
   logo.src = 'assets/img/laduni-sai.png?v=20260904-3';
   logo.alt = '';
-  logo.width = 44;
-  logo.height = 44;
   const words = document.createElement('span');
   words.innerHTML = '<strong>Laduni SAI</strong><small>Layanan Aduan Komunitas SAI</small>';
   brand.append(logo, words);
