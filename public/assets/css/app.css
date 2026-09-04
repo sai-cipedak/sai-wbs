@@ -30,17 +30,17 @@ header::before { content: ''; position: absolute; inset: 0 0 auto; height: 4px; 
 .portal-brand span { display: grid; gap: 1px; line-height: 1.15; }
 .portal-brand strong { font-size: 17px; }
 .portal-brand small { color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0; }
-.portal-header-tools { margin-left: auto; display: flex; align-items: center; justify-content: flex-end; gap: 10px; min-width: 0; }
+.portal-header-tools { margin-left: auto; display: flex; align-items: center; justify-content: flex-end; min-width: 0; }
 .portal-account { position: relative; display: flex; align-items: center; justify-content: flex-end; gap: 9px; min-width: 0; }
-.portal-account-copy { display: grid; gap: 1px; min-width: 0; text-align: right; line-height: 1.2; }
-.portal-account-copy span { color: var(--muted); font-size: 10px; }
-.portal-account-copy strong { max-width: 230px; overflow: hidden; text-overflow: ellipsis; font-size: 12px; white-space: nowrap; }
+.portal-account-copy { display: grid; justify-items: end; gap: 2px; min-width: 0; text-align: right; line-height: 1.2; }
+.portal-account-copy strong { max-width: 260px; overflow: hidden; text-overflow: ellipsis; font-size: 12px; white-space: nowrap; }
+.portal-account-logout { padding: 0; font-size: 11px; line-height: 1.25; }
 .portal-auth-button { flex: 0 0 auto; white-space: nowrap; }
 .portal-auth-status { position: absolute; top: calc(100% + 7px); right: 0; z-index: 2; width: max-content; max-width: min(280px, 80vw); padding: 7px 9px; border: 1px solid #f7c8c4; border-radius: 8px; background: var(--danger-soft); color: var(--danger); font-size: 11px; box-shadow: 0 6px 16px rgba(29,39,51,.08); }
 .portal-nav { width: 100%; display: flex; gap: 6px; overflow-x: auto; padding-top: 10px; border-top: 1px solid var(--line); scrollbar-width: thin; }
 .portal-nav-link { flex: 0 0 auto; padding: 7px 10px; border-radius: 9px; color: var(--muted); font-size: 13px; font-weight: 700; text-decoration: none; }
 .portal-nav-link:hover, .portal-nav-link[aria-current="page"] { color: var(--primary); background: var(--primary-soft); }
-.pill { font-size: 12px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
+.pill { display: none; }
 main { padding: 64px 0; }
 .hero, .page-head { max-width: 760px; margin-bottom: 32px; }
 h1 { font-size: clamp(34px, 6vw, 56px); line-height: 1.02; letter-spacing: -.04em; margin: 0 0 18px; }
@@ -156,4 +156,4 @@ legend { width: 100%; margin-bottom: 10px; font-weight: 650; line-height: 1.45; 
 .workspace-tab.active { color: var(--primary); background: var(--primary-soft); border-bottom-color: var(--primary); }
 .workspace-panels { background: var(--surface); }
 .workspace-panel { border-bottom: 0; }
-@media (max-width: 760px) { .grid, .home-actions, .two-col { grid-template-columns: 1fr; } .public-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stat-total { grid-column: 1 / -1; } .portal-header-tools { width: 100%; margin-left: 0; justify-content: space-between; } .portal-account-copy strong { max-width: min(48vw, 230px); } main { padding-top: 38px; } .submit-row, .status-head, .internal-toolbar { align-items: stretch; flex-direction: column; } .summary-list div { grid-template-columns: 1fr; gap: 3px; } .internal-grid { grid-template-columns: 1fr; } .case-list-panel { position: static; } .case-meta { grid-template-columns: 1fr; } .team-member-card .status-head { align-items: stretch; } }
+@media (max-width: 760px) { .grid, .home-actions, .two-col { grid-template-columns: 1fr; } .public-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stat-total { grid-column: 1 / -1; } .portal-header-tools { width: 100%; margin-left: 0; } .portal-account { margin-left: auto; } .portal-account-copy strong { max-width: min(72vw, 260px); } main { padding-top: 38px; } .submit-row, .status-head, .internal-toolbar { align-items: stretch; flex-direction: column; } .summary-list div { grid-template-columns: 1fr; gap: 3px; } .internal-grid { grid-template-columns: 1fr; } .case-list-panel { position: static; } .case-meta { grid-template-columns: 1fr; } .team-member-card .status-head { align-items: stretch; } }

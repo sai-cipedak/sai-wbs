@@ -124,7 +124,7 @@ function installAccount(header, session) {
   tools.className = 'portal-header-tools';
 
   const pagePill = header.querySelector(':scope > .pill');
-  if (pagePill) tools.append(pagePill);
+  if (pagePill) pagePill.remove();
 
   const account = document.createElement('div');
   account.className = 'portal-account';
@@ -132,15 +132,12 @@ function installAccount(header, session) {
   if (session?.user) {
     const copy = document.createElement('div');
     copy.className = 'portal-account-copy';
-    const label = document.createElement('span');
-    label.textContent = 'Masuk sebagai';
     const identity = document.createElement('strong');
-    identity.textContent = session.user.email || 'Akun Google';
-    copy.append(label, identity);
+    identity.textContent = `Halo, ${session.user.email || 'Akun Google'}`;
 
     const logout = document.createElement('button');
     logout.type = 'button';
-    logout.className = 'text-button small portal-auth-button';
+    logout.className = 'text-button portal-account-logout';
     logout.textContent = 'Keluar';
     logout.addEventListener('click', async () => {
       logout.disabled = true;
@@ -153,7 +150,8 @@ function installAccount(header, session) {
       }
       location.reload();
     });
-    account.append(copy, logout);
+    copy.append(identity, logout);
+    account.append(copy);
   } else {
     const login = document.createElement('button');
     login.type = 'button';
