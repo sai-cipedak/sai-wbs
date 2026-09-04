@@ -9,15 +9,41 @@ const ROLE_LINKS = {
   SYSTEM_ADMIN: ['Admin', 'admin-users.html'],
 };
 
+const HANDLER_PAGES = {
+  'secretariat.html': { active: 'secretariat.html', followup: 'followup.html' },
+  'followup.html': { active: 'secretariat.html', followup: 'followup.html' },
+  'hse.html': { active: 'hse.html', followup: 'hse-followup.html' },
+  'hse-followup.html': { active: 'hse.html', followup: 'hse-followup.html' },
+  'grievance.html': { active: 'grievance.html', followup: 'grievance-followup.html' },
+  'grievance-followup.html': { active: 'grievance.html', followup: 'grievance-followup.html' },
+  'dekom.html': { active: 'dekom.html', followup: 'dekom-followup.html' },
+  'dekom-followup.html': { active: 'dekom.html', followup: 'dekom-followup.html' },
+};
+
 const currentPage = location.pathname.split('/').pop() || 'index.html';
 const uatSuffix = new URLSearchParams(location.search).get('uat') === '1' ? '?uat=1' : '';
+
+function installAdjustmentStyles() {
+  if (document.querySelector('link[data-portal-adjustments]')) return;
+  const style = document.createElement('link');
+  style.rel = 'stylesheet';
+  style.href = 'assets/css/portal-adjustments.css?v=20260904-1';
+  style.dataset.portalAdjustments = '1';
+  document.head.append(style);
+}
+
+function isPageActive(href) {
+  if (currentPage === href) return true;
+  const group = HANDLER_PAGES[currentPage];
+  return Boolean(group && group.active === href);
+}
 
 function link(label, href, roleAware = false) {
   const node = document.createElement('a');
   node.textContent = label;
   node.href = roleAware ? `${href}${uatSuffix}` : href;
   node.className = 'portal-nav-link';
-  if (currentPage === href) node.setAttribute('aria-current', 'page');
+  if (isPageActive(href)) node.setAttribute('aria-current', 'page');
   return node;
 }
 
@@ -130,10 +156,11 @@ function installAccount(header, session) {
   account.className = 'portal-account';
 
   if (session?.user) {
+    const email = session.user.email || 'Akun Google';
     const copy = document.createElement('div');
     copy.className = 'portal-account-copy';
     const identity = document.createElement('strong');
-    identity.textContent = `Halo, ${session.user.email || 'Akun Google'}`;
+    identity.textContent = `Halo, ${email}`;
 
     const logout = document.createElement('button');
     logout.type = 'button';
@@ -151,7 +178,19 @@ function installAccount(header, session) {
       location.reload();
     });
     copy.append(identity, logout);
-    account.append(copy);
+
+    const mobile = document.createElement('div');
+    mobile.className = 'portal-account-mobile';
+    const emailLink = document.createElement('a');
+    emailLink.href = session.user.email ? `mailto:${session.user.email}` : '#';
+    emailLink.textContent = email;
+    const separator = document.createElement('span');
+    separator.textContent = '|';
+    const mobileLogout = logout.cloneNode(true);
+    mobileLogout.addEventListener('click', () => logout.click());
+    mobile.append(emailLink, separator, mobileLogout);
+
+    account.append(copy, mobile);
   } else {
     const login = document.createElement('button');
     login.type = 'button';
@@ -181,6 +220,40 @@ function installAccount(header, session) {
   tools.append(account);
   header.append(tools);
 }
+
+function normalizeHandlerMenu() {
+  const config = HANDLER_PAGES[currentPage];
+  if (!config) return;
+  const row = document.querySelector('.internal-toolbar .action-row');
+  if (!row) return;
+
+  row.classList.add('case-handler-nav');
+  row.replaceChildren();
+
+  const activeCases = document.createElement('a');
+  activeCases.className = 'button secondary';
+  activeCases.href = `${config.active}${uatSuffix}`;
+  activeCases.textContent = 'Daftar Kasus Aktif';
+  if (currentPage === config.active) activeCases.classList.add('case-handler-active');
+
+  const followup = document.createElement('a');
+  followup.className = 'button secondary';
+  followup.href = `${config.followup}${uatSuffix}`;
+  followup.textContent = 'Follow Up Pasca Penutupan';
+  if (currentPage === config.followup) followup.classList.add('case-handler-active');
+
+  const refresh = document.createElement('button');
+  refresh.id = 'portalRefreshButton';
+  refresh.type = 'button';
+  refresh.className = 'secondary';
+  refresh.textContent = 'Muat Ulang';
+  refresh.addEventListener('click', () => location.reload());
+
+  row.append(activeCases, followup, refresh);
+}
+
+installAdjustmentStyles();
+normalizeHandlerMenu();
 
 const header = document.querySelector('header .header-inner');
 if (header) {
