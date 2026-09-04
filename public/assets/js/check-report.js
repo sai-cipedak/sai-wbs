@@ -1,6 +1,6 @@
 import { invokePublic } from './supabase-client.js';
 import { setBusy, showMessage } from './form-utils.js';
-import { mountAnonymousEvidence } from './reporter-evidence.js?v=20260830-1';
+import { mountAnonymousEvidence } from './reporter-evidence.js?v=20260904-1';
 
 const form = document.querySelector('#checkReportForm');
 const message = document.querySelector('#formMessage');

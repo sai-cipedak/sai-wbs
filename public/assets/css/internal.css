@@ -1,4 +1,4 @@
-.internal-main { width: min(1180px, calc(100% - 32px)); }
+.internal-main { width: min(960px, calc(100% - 32px)); }
 .internal-layout { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; gap: 18px; align-items: start; }
 .case-list, .case-detail { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 18px; }
 .case-list h2, .case-detail h2 { margin-top: 0; }

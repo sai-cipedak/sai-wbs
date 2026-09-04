@@ -6,7 +6,7 @@
   <meta name="description" content="Lihat perkembangan dan komunikasi laporan beridentitas SAI Cipedak." />
   <meta name="robots" content="noindex,nofollow" />
   <title>Laporan Saya — SAI Cipedak</title>
-  <link rel="stylesheet" href="assets/css/app.css?v=20260904-3" />
+  <link rel="stylesheet" href="assets/css/app.css?v=20260904-4" />
   <link rel="stylesheet" href="assets/css/evidence.css?v=20260830-1" />
   <script src="assets/js/config.js"></script>
   <script type="module" src="assets/js/portal-shell.js?v=20260904-2"></script>
@@ -23,14 +23,17 @@
 
   <section id="workspacePanel" hidden>
     <div class="internal-toolbar">
-      <div><p class="eyebrow">Portal pelapor</p><h1 class="internal-title">Laporan Saya</h1><p id="userLabel" class="muted"></p></div>
-      <div class="action-row"><a class="button secondary" href="lapor-identitas.html">Buat laporan baru</a><button id="refreshButton" class="secondary" type="button">Segarkan</button><button id="logoutButton" class="text-button" type="button">Keluar</button></div>
+      <div><h1 class="internal-title">Laporan Saya</h1><p id="userLabel" class="muted"></p></div>
+      <div class="action-row"><a class="button secondary" href="lapor-identitas.html">Buat laporan baru</a><button id="refreshButton" class="secondary" type="button">Muat Ulang</button><button id="logoutButton" class="text-button" type="button">Keluar</button></div>
     </div>
     <div id="pageMessage" class="form-message internal-message" hidden></div>
-    <section id="reportList" class="action-stack" aria-live="polite"></section>
+    <div class="internal-grid">
+      <aside class="case-list-panel"><h2>Daftar Laporan</h2><div id="reportList" class="case-list" aria-live="polite"></div></aside>
+      <section id="reportDetail" class="case-detail"><p class="empty-state">Pilih laporan untuk melihat detail.</p></section>
+    </div>
   </section>
 </main>
 <footer class="container">SAI Cipedak · Portal Pelaporan</footer>
-<script type="module" src="assets/js/my-reports.js?v=20260830-1"></script>
+<script type="module" src="assets/js/my-reports.js?v=20260904-1"></script>
 </body>
 </html>

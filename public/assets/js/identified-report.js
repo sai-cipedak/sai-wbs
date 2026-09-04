@@ -1,6 +1,6 @@
 import { supabaseClient } from './supabase-client.js';
 import { getIntakePayload, setBusy, showMessage } from './form-utils.js';
-import { mountIdentifiedEvidence } from './reporter-evidence.js?v=20260830-2';
+import { mountIdentifiedEvidence } from './reporter-evidence.js?v=20260904-1';
 
 const loginPanel = document.querySelector('#loginPanel');
 const formPanel = document.querySelector('#identifiedFormPanel');

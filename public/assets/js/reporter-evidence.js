@@ -156,7 +156,7 @@ async function upload(access, section, data, refresh) {
     await request(access, { action: 'COMPLETE_UPLOAD', sessionId: init.sessionId, description });
   } catch (error) {
     if (uploadResponseReadable) throw error;
-    setMessage(section, 'Upload telah dikirim. Server sedang memverifikasi file; tekan Segarkan Bukti bila file belum muncul.', 'info');
+    setMessage(section, 'Upload telah dikirim. Server sedang memverifikasi file; tekan Muat Ulang Bukti bila file belum muncul.', 'info');
     await new Promise((resolve) => setTimeout(resolve, 1200));
   }
 
@@ -175,7 +175,7 @@ async function render(container, access) {
     el('h3', 'Bukti Pendukung'),
     el('p', 'Punya dokumen, foto, rekaman, atau bukti lain? Anda dapat menambahkannya sekarang atau nanti. File disimpan privat dan harus direview sebelum dapat dibuka ke Tim Pemeriksa.', 'muted'),
   );
-  const refreshButton = el('button', 'Segarkan Bukti', 'text-button');
+  const refreshButton = el('button', 'Muat Ulang Bukti', 'text-button');
   refreshButton.type = 'button';
   refreshButton.addEventListener('click', () => refresh().catch((error) => setMessage(section, error.message, 'error')));
   title.append(titleText, refreshButton);
