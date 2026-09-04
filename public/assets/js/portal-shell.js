@@ -97,7 +97,7 @@ function installBrand(header) {
   brand.setAttribute('aria-label', 'Layanan Aduan Komunitas SAI - Beranda');
   brand.replaceChildren();
   const logo = document.createElement('img');
-  logo.src = 'assets/img/laduni-sai.png';
+  logo.src = 'assets/img/laduni-sai.png?v=20260904-2';
   logo.alt = '';
   logo.width = 44;
   logo.height = 44;
