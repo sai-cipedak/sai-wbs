@@ -116,16 +116,14 @@ async function installNavigation(header, session) {
   const nav = document.createElement('nav');
   nav.className = 'portal-nav';
   nav.setAttribute('aria-label', 'Navigasi portal');
-  nav.append(link('Beranda', 'index.html'), link('Lapor anonim', 'lapor-anonim.html'), link('Cek anonim', 'cek-laporan.html'));
+  nav.append(link('Beranda', 'index.html'));
+
+  if (!session?.user) {
+    header.append(nav);
+    return;
+  }
 
   try {
-    if (!session?.user) {
-      nav.append(link('Laporan Saya', 'my-reports.html'));
-      header.append(nav);
-      return;
-    }
-
-    nav.append(link('Laporan Saya', 'my-reports.html'));
     const nowIso = new Date().toISOString();
     const [{ data: roleRows }, { count: assignmentCount }] = await Promise.all([
       supabaseClient.from('user_system_roles')
