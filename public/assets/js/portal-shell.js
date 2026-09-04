@@ -3,21 +3,21 @@ import { supabaseClient } from './supabase-client.js';
 const ROLE_LINKS = {
   TRIAGE: ['Penelaahan', 'internal.html'],
   SECRETARIAT: ['Sekretariat', 'secretariat.html'],
-  HSE: ['Perlindungan', 'hse.html'],
+  HSE: ['Safeguarding', 'hse.html'],
   GRIEVANCE_COORDINATOR: ['Pengaduan', 'grievance.html'],
   DEKOM: ['Dekom', 'dekom.html'],
   SYSTEM_ADMIN: ['Admin', 'admin-users.html'],
 };
 
 const HANDLER_PAGES = {
-  'secretariat.html': { active: 'secretariat.html', followup: 'followup.html' },
-  'followup.html': { active: 'secretariat.html', followup: 'followup.html' },
-  'hse.html': { active: 'hse.html', followup: 'hse-followup.html' },
-  'hse-followup.html': { active: 'hse.html', followup: 'hse-followup.html' },
-  'grievance.html': { active: 'grievance.html', followup: 'grievance-followup.html' },
-  'grievance-followup.html': { active: 'grievance.html', followup: 'grievance-followup.html' },
-  'dekom.html': { active: 'dekom.html', followup: 'dekom-followup.html' },
-  'dekom-followup.html': { active: 'dekom.html', followup: 'dekom-followup.html' },
+  'secretariat.html': { active: 'secretariat.html', followup: 'followup.html', title: 'Sekretariat DS' },
+  'followup.html': { active: 'secretariat.html', followup: 'followup.html', title: 'Sekretariat DS' },
+  'hse.html': { active: 'hse.html', followup: 'hse-followup.html', title: 'Safeguarding' },
+  'hse-followup.html': { active: 'hse.html', followup: 'hse-followup.html', title: 'Safeguarding' },
+  'grievance.html': { active: 'grievance.html', followup: 'grievance-followup.html', title: 'Pengaduan' },
+  'grievance-followup.html': { active: 'grievance.html', followup: 'grievance-followup.html', title: 'Pengaduan' },
+  'dekom.html': { active: 'dekom.html', followup: 'dekom-followup.html', title: 'Dekom' },
+  'dekom-followup.html': { active: 'dekom.html', followup: 'dekom-followup.html', title: 'Dekom' },
 };
 
 const currentPage = location.pathname.split('/').pop() || 'index.html';
@@ -27,7 +27,7 @@ function installAdjustmentStyles() {
   if (document.querySelector('link[data-portal-adjustments]')) return;
   const style = document.createElement('link');
   style.rel = 'stylesheet';
-  style.href = 'assets/css/portal-adjustments.css?v=20260904-1';
+  style.href = 'assets/css/portal-adjustments.css?v=20260904-2';
   style.dataset.portalAdjustments = '1';
   document.head.append(style);
 }
@@ -221,6 +221,17 @@ function installAccount(header, session) {
   header.append(tools);
 }
 
+function normalizeHandlerHeader() {
+  const config = HANDLER_PAGES[currentPage];
+  if (!config) return;
+  const titleBlock = document.querySelector('.internal-toolbar > div:first-child');
+  if (!titleBlock) return;
+  const eyebrow = titleBlock.querySelector('.eyebrow');
+  const title = titleBlock.querySelector('.internal-title');
+  if (eyebrow) eyebrow.textContent = 'Workspace Internal';
+  if (title) title.textContent = config.title;
+}
+
 function normalizeHandlerMenu() {
   const config = HANDLER_PAGES[currentPage];
   if (!config) return;
@@ -253,6 +264,7 @@ function normalizeHandlerMenu() {
 }
 
 installAdjustmentStyles();
+normalizeHandlerHeader();
 normalizeHandlerMenu();
 
 const header = document.querySelector('header .header-inner');
