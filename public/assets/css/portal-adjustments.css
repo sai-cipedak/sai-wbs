@@ -7,12 +7,20 @@
   box-shadow: inset 0 0 0 1px rgba(22,89,155,.08);
 }
 
+/* Never force the Laduni artwork into a square. Preserve the source aspect ratio. */
+.portal-brand img {
+  width: auto;
+  height: 44px;
+  max-width: 88px;
+  object-fit: contain;
+}
+
 .portal-account-mobile { display: none; }
 
 @media (max-width: 640px) {
   .header-inner {
     display: grid;
-    grid-template-columns: 52px minmax(0,1fr);
+    grid-template-columns: 64px minmax(0,1fr);
     align-items: center;
     gap: 4px 12px;
     padding: 14px 0 10px;
@@ -21,9 +29,12 @@
   .portal-brand img {
     grid-column: 1;
     grid-row: 1 / span 2;
-    width: 52px;
+    width: auto;
     height: 52px;
+    max-width: 64px;
+    object-fit: contain;
     align-self: center;
+    justify-self: start;
   }
   .portal-brand span {
     grid-column: 2;
