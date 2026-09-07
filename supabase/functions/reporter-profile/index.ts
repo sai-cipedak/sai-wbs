@@ -69,7 +69,7 @@ async function accessContext(userId: string, email: string, orgId: string) {
   if (profile && profile.organization_id !== orgId) throw new Error('PROFILE_ORG_MISMATCH');
   const now = Date.now();
   const hasInternalRole = (roleRows ?? []).some((role) => !role.active_until || Date.parse(role.active_until) > now);
-  const internalAccess = Boolean(profile?.is_active && (profile.member_type === 'INTERNAL' || hasInternalRole));
+  const internalAccess = Boolean(profile?.is_active && hasInternalRole);
   const accountInactive = Boolean(profile && !profile.is_active);
   const suspended = reporter?.reporting_status === 'SUSPENDED';
   const expired = Boolean(reporter && (reporter.reporting_status === 'EXPIRED' || Date.parse(reporter.eligibility_expires_at) <= now));
@@ -165,7 +165,7 @@ Deno.serve(async (req: Request) => {
       accessCodeId = code.id;
     }
     const displayName = input.displayName || String(user.user_metadata?.full_name ?? user.user_metadata?.name ?? email).slice(0, 200);
-    const { data, error } = await admin.rpc('complete_reporter_onboarding_atomic', {
+    const { data, error } = await admin.rpc('complete_reporter_onboarding_v2_atomic', {
       p_user_id: user.id, p_organization_id: org.id, p_email: email,
       p_display_name: displayName, p_phone: input.phone, p_academic_year: currentAcademicYear(),
       p_children: input.children, p_verification_status: verificationStatus,

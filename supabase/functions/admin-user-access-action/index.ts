@@ -32,6 +32,12 @@ Deno.serve(async(req)=>{if(req.method==='OPTIONS')return new Response('ok',{head
   const{data,error}=await admin.rpc('admin_set_reporter_status_atomic',{p_actor_user_id:u.id,p_organization_id:orgId,p_user_id:userId,p_reporting_status:reportingStatus});
   if(error){const m=String(error.message??'');if(m.includes('REPORTER_PROFILE_NOT_FOUND'))return json({error:'Profile OTS tidak ditemukan.'},404);if(m.includes('REPORTER_EXPIRED'))return json({error:'Verifikasi OTS sudah kedaluwarsa. User harus verifikasi ulang dengan kode tahun ajaran aktif.'},409);if(m.includes('FORBIDDEN'))return json({error:'Akun ini tidak memiliki kewenangan Administrator Sistem.'},403);return json({error:'Status reporter belum dapat diubah.'},400);}return json(data);
  }
+ if(action==='REVOKE_ALL_INTERNAL_ROLES'){
+  const userId=String(b.userId??'');
+  if(!userId)return json({error:'User tidak valid.'},400);
+  const{data,error}=await admin.rpc('admin_revoke_all_internal_roles_atomic',{p_actor_user_id:u.id,p_organization_id:orgId,p_user_id:userId});
+  if(error){const m=String(error.message??'');if(m.includes('LAST_ADMIN'))return json({error:'Seluruh akses SYSTEM_ADMIN terakhir tidak dapat dicabut.'},409);if(m.includes('PROFILE_NOT_FOUND'))return json({error:'Profile user tidak ditemukan.'},404);if(m.includes('FORBIDDEN'))return json({error:'Akun ini tidak memiliki kewenangan Administrator Sistem.'},403);return json({error:'Akses internal belum dapat dicabut.'},400);}return json(data);
+ }
  if(['GRANT_ROLE','REVOKE_ROLE','SET_PROFILE_ACTIVE','CREATE_PENDING_GRANT','REVOKE_PENDING_GRANT','UPSERT_REPORTER_ALLOWLIST','REVOKE_REPORTER_ALLOWLIST'].includes(action)){
   const until=String(b.activeUntil??'').trim()||null;
   if(until&&Number.isNaN(Date.parse(until)))return json({error:'Tanggal kedaluwarsa tidak valid.'},400);

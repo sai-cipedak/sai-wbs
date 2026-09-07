@@ -29,11 +29,14 @@ Data kontak dan anak OTS disimpan di `reporter_profiles` dan `reporter_children`
 - Kelayakan membuat laporan baru dibatasi per tahun ajaran dan diperiksa ulang di RPC transaksi saat case dibuat.
 - Suspend reporter hanya memblokir case beridentitas baru. Session akun dan akses ke case lama tidak dicabut.
 - Akun dengan role internal aktif melewati onboarding OTS; invitation internal tetap memakai flow claim terpisah.
+- Status internal ditentukan dari role aktif, bukan hanya label `profiles.member_type`. Setelah seluruh role dicabut, user kembali mengikuti onboarding/eligibility reporter biasa.
 
 ## Admin separation
 Role `SYSTEM_ADMIN` tidak memberi hak membaca case. Akses teknis dan akses substansi dipisahkan.
 
 Admin dapat melihat profile OTS untuk verifikasi operasional serta mengubah status reporter `ACTIVE`/`SUSPENDED`. Mutasi ini dilakukan lewat RPC service-only dan dicatat di audit log.
+
+Offboarding pengurus dilakukan dengan mencabut role internal tanpa menonaktifkan akun portal atau mengubah eligibility reporter. `profiles.is_active = false` dipertahankan sebagai global safety block untuk kasus keamanan/penyalahgunaan dan bukan mekanisme offboarding rutin.
 
 ## Audit
 `audit_logs` tidak dapat UPDATE/DELETE dari aplikasi. Jangan menyalin isi PII atau evidence ke `details`; audit hanya menyimpan metadata aktivitas yang diperlukan.

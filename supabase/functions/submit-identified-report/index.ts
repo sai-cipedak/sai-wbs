@@ -57,7 +57,7 @@ Deno.serve(async (req: Request) => {
 
     const safetyFastLane = intake.childSafetyRisk;
     const publicCaseId = generatePublicCaseId();
-    const { data: created, error: createError } = await admin.rpc('create_identified_submission_v2_atomic', {
+    const { data: created, error: createError } = await admin.rpc('create_identified_submission_v3_atomic', {
       p_organization_id: org.id,
       p_policy_version_id: org.active_policy_version_id,
       p_user_id: user.id,
