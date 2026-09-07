@@ -25,7 +25,7 @@ Data kontak dan anak OTS disimpan di `reporter_profiles` dan `reporter_children`
 ## Reporter onboarding and eligibility
 
 - OTS melakukan self-registration setelah login Google dengan Kode Akses Komunitas aktif. Kode diverifikasi di Edge Function terhadap PBKDF2 hash; plaintext tidak disimpan.
-- Email pada allowlist lama tetap dapat melengkapi profile tanpa kode selama masa transisi.
+- Allowlist reporter lama telah dipensiunkan dari UI admin. Akun OTS baru harus memiliki identitas Auth sendiri lalu memverifikasi hubungan komunitas dengan Kode Akses Komunitas.
 - Kelayakan membuat laporan baru dibatasi per tahun ajaran dan diperiksa ulang di RPC transaksi saat case dibuat.
 - Suspend reporter hanya memblokir case beridentitas baru. Session akun dan akses ke case lama tidak dicabut.
 - Akun dengan role internal aktif melewati onboarding OTS; invitation internal tetap memakai flow claim terpisah.
