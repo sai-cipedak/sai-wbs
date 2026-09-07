@@ -1,4 +1,4 @@
-# SAI Cipedak — Sistem Pelaporan Integritas, Perlindungan & Pengaduan
+# Sempritan SAI — Sistem Pelaporan Terintegrasi dan Transparan
 
 Scaffold **Batch 1: Foundation & Security**.
 

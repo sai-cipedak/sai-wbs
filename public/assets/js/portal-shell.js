@@ -94,13 +94,13 @@ function installBrand(header) {
   const brand = existing instanceof HTMLAnchorElement ? existing : document.createElement('a');
   brand.className = 'brand portal-brand';
   brand.href = 'index.html';
-  brand.setAttribute('aria-label', 'Layanan Aduan Komunitas SAI - Beranda');
+  brand.setAttribute('aria-label', 'Sempritan SAI - Beranda');
   brand.replaceChildren();
   const logo = document.createElement('img');
   logo.src = 'assets/img/laduni-sai.png?v=20260904-3';
   logo.alt = '';
   const words = document.createElement('span');
-  words.innerHTML = '<strong>Laduni SAI</strong><small>Layanan Aduan Komunitas SAI</small>';
+  words.innerHTML = '<strong>Sempritan SAI</strong><small>Sistem Pelaporan Terintegrasi dan Transparan</small>';
   brand.append(logo, words);
   if (brand !== existing) existing.replaceWith(brand);
 }
