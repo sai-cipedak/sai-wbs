@@ -47,8 +47,6 @@ Deno.serve(async (req: Request) => {
     const submissionToken = String(raw.submissionToken ?? '').trim();
     if (submissionToken && !UUID_RE.test(submissionToken)) return jsonResponse({ error: 'Token pengiriman tidak valid. Muat ulang halaman dan coba kembali.' }, 400, corsHeaders);
     const intake = normalizeIntake(raw);
-    const email = user.email.trim().toLowerCase();
-
     if (submissionToken) {
       const existing = await existingSubmission(user.id, submissionToken);
       if (existing) return existingResponse(existing);
@@ -57,28 +55,12 @@ Deno.serve(async (req: Request) => {
     const { data: org, error: orgError } = await admin.from('organizations').select('id, active_policy_version_id').eq('code', ORG_CODE).eq('is_active', true).single();
     if (orgError || !org?.active_policy_version_id) throw new Error('Konfigurasi organisasi belum siap.');
 
-    const { data: allowlist, error: allowError } = await admin.from('reporter_allowlist').select('email, member_type').eq('organization_id', org.id).eq('is_active', true);
-    if (allowError) throw allowError;
-    const membership = (allowlist ?? []).find((row) => String(row.email).trim().toLowerCase() === email);
-    if (!membership) return jsonResponse({ error: 'Akun Google ini belum terdaftar sebagai OTS atau staf SAI Cipedak. Gunakan jalur tanpa identitas atau hubungi pengelola portal.' }, 403, corsHeaders);
-
-    const displayName = String(user.user_metadata?.full_name ?? user.user_metadata?.name ?? email).slice(0, 200);
-    const { data: existingProfile, error: existingProfileError } = await admin.from('profiles').select('user_id, organization_id, member_type, is_active').eq('user_id', user.id).maybeSingle();
-    if (existingProfileError) throw existingProfileError;
-    if (existingProfile && existingProfile.organization_id !== org.id) throw new Error('Profile akun berada pada organisasi berbeda.');
-    const profileMemberType = existingProfile?.member_type === 'INTERNAL' ? 'INTERNAL' : membership.member_type;
-    const profileIsActive = existingProfile ? existingProfile.is_active : true;
-
     const safetyFastLane = intake.childSafetyRisk;
     const publicCaseId = generatePublicCaseId();
-    const { data: created, error: createError } = await admin.rpc('create_identified_submission_atomic', {
+    const { data: created, error: createError } = await admin.rpc('create_identified_submission_v2_atomic', {
       p_organization_id: org.id,
       p_policy_version_id: org.active_policy_version_id,
       p_user_id: user.id,
-      p_email: email,
-      p_display_name: displayName,
-      p_profile_member_type: profileMemberType,
-      p_profile_is_active: profileIsActive,
       p_public_case_id: publicCaseId,
       p_submission_token: submissionToken || null,
       p_intake: intake,
@@ -91,7 +73,12 @@ Deno.serve(async (req: Request) => {
         const existing = await existingSubmission(user.id, submissionToken);
         if (existing) return existingResponse(existing);
       }
-      if ((createError?.message ?? '').includes('PROFILE_ORG_MISMATCH')) throw new Error('Profile akun berada pada organisasi berbeda.');
+      const rpcMessage = createError?.message ?? '';
+      if (rpcMessage.includes('PROFILE_REQUIRED')) return jsonResponse({ error: 'Lengkapi profile OTS dan verifikasi akses sebelum membuat laporan.' }, 403, corsHeaders);
+      if (rpcMessage.includes('PROFILE_INACTIVE')) return jsonResponse({ error: 'Akun ini dinonaktifkan. Hubungi pengelola portal.' }, 403, corsHeaders);
+      if (rpcMessage.includes('REPORTER_SUSPENDED')) return jsonResponse({ error: 'Akses membuat laporan baru sedang ditangguhkan oleh admin. Laporan lama tetap dapat diakses.' }, 403, corsHeaders);
+      if (rpcMessage.includes('REPORTER_EXPIRED')) return jsonResponse({ error: 'Verifikasi OTS sudah kedaluwarsa. Perbarui profile dengan Kode Akses Komunitas tahun ajaran aktif.' }, 403, corsHeaders);
+      if (rpcMessage.includes('PROFILE_ORG_MISMATCH')) throw new Error('Profile akun berada pada organisasi berbeda.');
       throw createError ?? new Error('Gagal membuat laporan.');
     }
 

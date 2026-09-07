@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Lengkapi profile OTS untuk menggunakan Sempritan SAI." />
+  <title>Profile OTS — Sempritan SAI</title>
+  <link rel="stylesheet" href="assets/css/app.css?v=20260907-2" />
+  <script src="assets/js/config.js"></script>
+  <script type="module" src="assets/js/portal-shell.js?v=20260907-2"></script>
+</head>
+<body>
+<header><div class="container header-inner"><a class="brand" href="index.html">Sempritan SAI</a><div class="pill">Profile OTS</div></div></header>
+<main class="container narrow">
+  <a class="back-link" href="index.html">← Kembali ke beranda</a>
+  <section class="page-head">
+    <p class="eyebrow">Akses laporan beridentitas</p>
+    <h1>Lengkapi profile OTS.</h1>
+    <p class="lead">Data ini membantu memverifikasi hubungan Anda dengan komunitas SAI. Identitas tetap disimpan terpisah dari isi laporan.</p>
+  </section>
+
+  <section id="loginPanel" class="form-card" hidden>
+    <h2>Masuk dengan akun Google</h2>
+    <p>Setelah login, Anda dapat melengkapi atau memperbarui profile OTS.</p>
+    <button id="googleLogin" class="primary" type="button">Masuk dengan Google</button>
+    <div id="loginMessage" class="form-message" hidden></div>
+  </section>
+
+  <section id="profileStatus" class="result-card" hidden></section>
+
+  <form id="profileForm" class="report-form" hidden>
+    <section class="form-card">
+      <div><p class="eyebrow">Identitas OTS</p><h2 id="formTitle">Data diri</h2></div>
+      <label>Nama OTS<input id="displayName" name="displayName" maxlength="200" autocomplete="name" required /></label>
+      <label>Email Google<input id="profileEmail" type="email" disabled /></label>
+      <label>Nomor kontak / WhatsApp<input id="phone" name="phone" maxlength="32" autocomplete="tel" inputmode="tel" placeholder="Contoh: 0812 3456 7890" required /></label>
+      <label>Tahun ajaran<input id="academicYear" disabled /></label>
+    </section>
+
+    <section class="form-card">
+      <div><p class="eyebrow">Data anak di SAI</p><h2>Anak dan kelas/angkatan</h2><p class="muted">Tambahkan semua anak yang saat ini berada di SAI.</p></div>
+      <div id="childrenList" class="children-list"></div>
+      <button id="addChild" class="secondary" type="button">+ Tambah anak</button>
+    </section>
+
+    <section id="verificationPanel" class="form-card">
+      <div><p class="eyebrow">Verifikasi komunitas</p><h2>Konfirmasi akses</h2></div>
+      <div id="legacyNotice" class="form-message info" hidden>Email ini ada pada allowlist lama. Anda dapat melanjutkan tanpa memasukkan kode.</div>
+      <label id="accessCodeLabel">Kode Akses Komunitas<input id="communityAccessCode" autocomplete="off" autocapitalize="characters" maxlength="80" /></label>
+      <label class="choice consent-choice"><input id="consent" type="checkbox" /> Saya menyetujui data profile ini digunakan untuk verifikasi akses dan komunikasi terkait laporan.</label>
+    </section>
+
+    <div id="formMessage" class="form-message" hidden></div>
+    <div class="submit-row"><button id="saveProfile" class="primary" type="submit">Simpan dan lanjutkan</button></div>
+  </form>
+</main>
+<footer class="container">Sempritan SAI · SAI Cipedak</footer>
+<script type="module" src="assets/js/reporter-profile.js?v=20260907-2"></script>
+</body>
+</html>

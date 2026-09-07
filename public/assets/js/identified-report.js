@@ -36,8 +36,34 @@ async function refreshSession() {
   const { data: { session } } = await supabaseClient.auth.getSession();
   if (session?.user) {
     loginPanel.hidden = true;
-    formPanel.hidden = false;
-    identityLabel.textContent = session.user.email || 'Akun Google terverifikasi';
+    formPanel.hidden = true;
+    try {
+      const { data, error } = await supabaseClient.functions.invoke('reporter-profile', { body: { action: 'STATUS' } });
+      if (error || !data) throw new Error('Status profile belum dapat diperiksa. Coba muat ulang halaman.');
+      if (data.internalInvitationPending) {
+        location.replace('access.html');
+        return;
+      }
+      if (data.onboardingRequired) {
+        location.replace('profile.html?returnTo=lapor-identitas.html');
+        return;
+      }
+      if (!data.canSubmitIdentified) {
+        const reason = data.accountInactive
+          ? 'Akun ini dinonaktifkan. Hubungi pengelola portal.'
+          : data.reporterProfile?.reportingStatus === 'SUSPENDED'
+            ? 'Akses membuat laporan baru sedang ditangguhkan oleh admin. Laporan lama tetap dapat dibuka dari Laporan Saya.'
+            : 'Akun ini belum dapat membuat laporan beridentitas.';
+        showMessage(document.querySelector('#loginMessage'), reason, 'error');
+        loginPanel.hidden = false;
+        return;
+      }
+      formPanel.hidden = false;
+      identityLabel.textContent = session.user.email || 'Akun Google terverifikasi';
+    } catch (error) {
+      showMessage(document.querySelector('#loginMessage'), error.message || 'Status profile belum dapat diperiksa.', 'error');
+      loginPanel.hidden = false;
+    }
   } else {
     loginPanel.hidden = false;
     formPanel.hidden = true;

@@ -108,6 +108,12 @@ legend { width: 100%; margin-bottom: 10px; font-weight: 650; line-height: 1.45; 
 .portal-auth-managed #googleLogin, .portal-auth-managed #logoutButton { display: none !important; }
 .portal-login-context { margin-bottom: 20px; }
 .identity-strip.portal-legacy-actions-only { justify-content: flex-end; padding: 0; background: transparent; }
+.children-list { display: grid; gap: 12px; }
+.child-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: end; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--canvas); }
+.child-remove { padding: 11px 12px; }
+.consent-choice { align-items: flex-start; line-height: 1.5; }
+.status-blocked { border-color: #f7c8c4; background: var(--danger-soft); }
+.status-blocked h2 { color: var(--danger); }
 .compact-form { max-width: 560px; margin-bottom: 20px; }
 .status-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
 .status-head h2 { margin: 0; }
@@ -158,4 +164,4 @@ legend { width: 100%; margin-bottom: 10px; font-weight: 650; line-height: 1.45; 
 .workspace-tab.active { color: var(--primary); background: var(--primary-soft); border-bottom-color: var(--primary); }
 .workspace-panels { background: var(--surface); }
 .workspace-panel { border-bottom: 0; }
-@media (max-width: 760px) { .grid, .home-actions, .two-col { grid-template-columns: 1fr; } .public-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stat-total { grid-column: 1 / -1; } .portal-header-tools { width: 100%; margin-left: 0; } .portal-account { margin-left: auto; } .portal-account-copy strong { max-width: min(72vw, 260px); } main { padding-top: 38px; } .submit-row, .status-head, .internal-toolbar { align-items: stretch; flex-direction: column; } .summary-list div { grid-template-columns: 1fr; gap: 3px; } .internal-grid { grid-template-columns: 1fr; } .case-list-panel { position: static; } .case-meta { grid-template-columns: 1fr; } .team-member-card .status-head { align-items: stretch; } }
+@media (max-width: 760px) { .grid, .home-actions, .two-col, .child-row { grid-template-columns: 1fr; } .public-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stat-total { grid-column: 1 / -1; } .portal-header-tools { width: 100%; margin-left: 0; } .portal-account { margin-left: auto; } .portal-account-copy strong { max-width: min(72vw, 260px); } main { padding-top: 38px; } .submit-row, .status-head, .internal-toolbar { align-items: stretch; flex-direction: column; } .summary-list div { grid-template-columns: 1fr; gap: 3px; } .internal-grid { grid-template-columns: 1fr; } .case-list-panel { position: static; } .case-meta { grid-template-columns: 1fr; } .team-member-card .status-head { align-items: stretch; } }

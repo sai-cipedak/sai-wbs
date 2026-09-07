@@ -11,17 +11,26 @@ async function authSignInMap(){const map=new Map<string,any>();try{for(let page=
 Deno.serve(async(req)=>{if(req.method==='OPTIONS')return new Response('ok',{headers:cors});if(req.method!=='POST')return json({error:'Metode tidak diizinkan.'},405);try{const u=await currentUser(req),orgId=await adminOrg(u.id),b=await req.json().catch(()=>({})),action=String(b.action??'LIST');
  if(action==='LIST'){
   await admin.rpc('expire_pending_system_role_grants',{p_organization_id:orgId,p_email:null});
-  const[{data:profiles,error:pe},{data:roleRows,error:re},{data:catalog,error:ce},{data:pending,error:pge},{data:conflicts,error:cfe},{data:reporters,error:rae}]=await Promise.all([
+  const[{data:profiles,error:pe},{data:roleRows,error:re},{data:catalog,error:ce},{data:pending,error:pge},{data:conflicts,error:cfe},{data:reporters,error:rae},{data:reporterProfiles,error:rpe},{data:reporterChildren,error:rce}]=await Promise.all([
    admin.from('profiles').select('user_id,display_name,email,member_type,is_active,created_at,updated_at').eq('organization_id',orgId).order('display_name'),
    admin.from('user_system_roles').select('id,user_id,role_code,active_from,active_until,granted_by,created_at').eq('organization_id',orgId).order('role_code'),
    admin.from('system_roles').select('code,name_id,description_id,is_privileged').order('code'),
    admin.from('pending_system_role_grants').select('id,email,role_code,status,active_from,active_until,claim_until,created_at,updated_at').eq('organization_id',orgId).order('created_at',{ascending:false}),
    admin.from('system_role_conflicts').select('role_code_a,role_code_b,reason_id').order('role_code_a'),
-   admin.from('reporter_allowlist').select('id,email,member_type,is_active,notes,created_at,updated_at').eq('organization_id',orgId).order('email')
-  ]);if(pe||re||ce||pge||cfe||rae)throw pe||re||ce||pge||cfe||rae;
+   admin.from('reporter_allowlist').select('id,email,member_type,is_active,notes,created_at,updated_at').eq('organization_id',orgId).order('email'),
+   admin.from('reporter_profiles').select('user_id,phone,onboarding_status,verification_status,reporting_status,academic_year,eligibility_expires_at,consent_at,verified_at,updated_at').eq('organization_id',orgId),
+   admin.from('reporter_children').select('id,user_id,child_name,class_or_cohort,academic_year,is_active').eq('organization_id',orgId).eq('is_active',true).order('created_at')
+  ]);if(pe||re||ce||pge||cfe||rae||rpe||rce)throw pe||re||ce||pge||cfe||rae||rpe||rce;
   const authMap=await authSignInMap();
   const roleMap=new Map<string,any[]>();for(const r of roleRows??[]){if(!active(r))continue;const arr=roleMap.get(r.user_id)??[];arr.push({id:r.id,roleCode:r.role_code,activeFrom:r.active_from,activeUntil:r.active_until});roleMap.set(r.user_id,arr);}
-  return json({roles:catalog??[],conflicts:conflicts??[],users:(profiles??[]).map((p:any)=>({...p,roles:roleMap.get(p.user_id)??[],lastSignInAt:authMap.get(p.user_id)?.lastSignInAt??null})),pendingGrants:(pending??[]).filter((x:any)=>x.status==='PENDING'),reporterAllowlist:reporters??[]});
+  const reporterMap=new Map<string,any>();for(const rp of reporterProfiles??[])reporterMap.set(rp.user_id,{...rp,children:(reporterChildren??[]).filter((c:any)=>c.user_id===rp.user_id).map((c:any)=>({id:c.id,name:c.child_name,classOrCohort:c.class_or_cohort,academicYear:c.academic_year}))});
+  return json({roles:catalog??[],conflicts:conflicts??[],users:(profiles??[]).map((p:any)=>({...p,roles:roleMap.get(p.user_id)??[],reporterProfile:reporterMap.get(p.user_id)??null,lastSignInAt:authMap.get(p.user_id)?.lastSignInAt??null})),pendingGrants:(pending??[]).filter((x:any)=>x.status==='PENDING'),reporterAllowlist:reporters??[]});
+ }
+ if(action==='SET_REPORTER_STATUS'){
+  const userId=String(b.userId??''),reportingStatus=String(b.reportingStatus??'').toUpperCase();
+  if(!userId||!['ACTIVE','SUSPENDED'].includes(reportingStatus))return json({error:'User atau status reporter tidak valid.'},400);
+  const{data,error}=await admin.rpc('admin_set_reporter_status_atomic',{p_actor_user_id:u.id,p_organization_id:orgId,p_user_id:userId,p_reporting_status:reportingStatus});
+  if(error){const m=String(error.message??'');if(m.includes('REPORTER_PROFILE_NOT_FOUND'))return json({error:'Profile OTS tidak ditemukan.'},404);if(m.includes('REPORTER_EXPIRED'))return json({error:'Verifikasi OTS sudah kedaluwarsa. User harus verifikasi ulang dengan kode tahun ajaran aktif.'},409);if(m.includes('FORBIDDEN'))return json({error:'Akun ini tidak memiliki kewenangan Administrator Sistem.'},403);return json({error:'Status reporter belum dapat diubah.'},400);}return json(data);
  }
  if(['GRANT_ROLE','REVOKE_ROLE','SET_PROFILE_ACTIVE','CREATE_PENDING_GRANT','REVOKE_PENDING_GRANT','UPSERT_REPORTER_ALLOWLIST','REVOKE_REPORTER_ALLOWLIST'].includes(action)){
   const until=String(b.activeUntil??'').trim()||null;

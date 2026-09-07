@@ -121,6 +121,9 @@ async function installNavigation(header, session) {
     return;
   }
 
+  nav.append(link('Profile OTS', 'profile.html'));
+  nav.append(link('Laporan Saya', 'my-reports.html'));
+
   try {
     const nowIso = new Date().toISOString();
     const [{ data: roleRows }, { count: assignmentCount }] = await Promise.all([
@@ -143,6 +146,23 @@ async function installNavigation(header, session) {
     console.warn('Navigasi role belum dapat dimuat.', error);
   }
   header.append(nav);
+}
+
+async function enforceReporterOnboarding(session) {
+  if (!session?.user || !['index.html', 'my-reports.html'].includes(currentPage)) return;
+  try {
+    const { data, error } = await supabaseClient.functions.invoke('reporter-profile', { body: { action: 'STATUS' } });
+    if (error || !data) return;
+    if (data.internalInvitationPending) {
+      location.replace('access.html');
+      return;
+    }
+    if (data.onboardingRequired && (currentPage === 'index.html' || !data.reporterProfile)) {
+      location.replace(`profile.html?returnTo=${encodeURIComponent(currentPage)}`);
+    }
+  } catch (error) {
+    console.warn('Status onboarding reporter belum dapat dimuat.', error);
+  }
 }
 
 function prepareLegacyAuth(session) {
@@ -312,4 +332,5 @@ if (header) {
   prepareLegacyAuth(session);
   installAccount(header, session);
   await installNavigation(header, session);
+  await enforceReporterOnboarding(session);
 }
