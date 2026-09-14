@@ -1,4 +1,4 @@
-# Sempritan SAI — Sistem Pelaporan Terintegrasi dan Transparan
+# Sempritan SAI — Sistem Pelaporan Insiden serta Aduan
 
 Scaffold **Batch 1: Foundation & Security**.
 

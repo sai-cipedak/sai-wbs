@@ -100,7 +100,7 @@ function installBrand(header) {
   logo.src = 'assets/img/laduni-sai.png?v=20260904-3';
   logo.alt = '';
   const words = document.createElement('span');
-  words.innerHTML = '<strong>Sempritan SAI</strong><small>Sistem Pelaporan Terintegrasi dan Transparan</small>';
+  words.innerHTML = '<strong>Sempritan SAI</strong><small>Sistem Pelaporan Insiden serta Aduan</small>';
   brand.append(logo, words);
   if (brand !== existing) existing.replaceWith(brand);
 }
